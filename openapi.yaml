@@ -27,9 +27,9 @@ paths:
       summary: Search content by goal template
       description: >-
         Goal-driven search that loads a filterset template from schemas/goals/,
-        substitutes user-provided parameters (e.g. {{city}}), executes multiple
-        content queries in parallel, and returns merged, deduplicated results
-        ranked by relevance.
+        substitutes user-provided parameters (e.g. `{{city}}`), executes
+        multiple content queries in parallel, and returns merged, deduplicated
+        results ranked by relevance.
       parameters: []
       requestBody:
         required: true
@@ -327,7 +327,7 @@ paths:
       operationId: PublishersController_verifyDomain
       summary: Retry domain verification
       description: >-
-        Re-checks DNS TXT record at _roadbeat.{domain} for the verification
+        Re-checks DNS TXT record at `_roadbeat.{domain}` for the verification
         token.
       parameters:
         - name: id
@@ -383,7 +383,7 @@ paths:
       description: >-
         Index a new content teaser into Elasticsearch. The teaser is validated,
         optionally signature-verified, and indexed into the
-        content-type-specific index (roadbeat-content-{type}).
+        `roadbeat-content-{type}` index.
       parameters:
         - name: X-Publisher-Key
           in: header
@@ -675,8 +675,8 @@ paths:
       operationId: AdminController_invalidateCache
       summary: Invalidate cache by pattern
       description: >-
-        Pass { "pattern": "search:*" } to clear search cache, or { "pattern":
-        "all" } to clear everything.
+        Pass `{ "pattern": "search:*" }` to clear search cache, or
+        `{ "pattern": "all" }` to clear everything.
       parameters:
         - name: X-Admin-Key
           in: header
@@ -745,7 +745,7 @@ paths:
       parameters:
         - name: X-Admin-Key
           in: header
-          description: Admin API key for authentication
+          description: Admin API key
           required: true
           schema:
             type: string
@@ -765,7 +765,7 @@ paths:
       parameters:
         - name: X-Admin-Key
           in: header
-          description: Admin API key for authentication
+          description: Admin API key
           required: true
           schema:
             type: string
@@ -781,7 +781,7 @@ paths:
       parameters:
         - name: X-Admin-Key
           in: header
-          description: Admin API key for authentication
+          description: Admin API key
           required: true
           schema:
             type: string
@@ -859,10 +859,10 @@ paths:
           required: false
           in: query
           schema:
+            type: string
             enum:
               - asc
               - desc
-            type: string
       responses:
         '200':
           description: ''
@@ -1082,7 +1082,7 @@ components:
             - $ref: '#/components/schemas/GeoBoundingBoxDto'
         sort:
           description: >-
-            Sort order. Array of { field: "asc"|"desc" } objects. Default:
+            Sort order. Array of `{ field: "asc"|"desc" }` objects. Default:
             relevance then date.
           example:
             - temporal.date_published: desc
@@ -1148,8 +1148,8 @@ components:
         goal_parameters:
           type: object
           description: >-
-            Goal-specific parameter substitutions (e.g. { "city": "Berlin",
-            "field": "Software Engineering" })
+            Goal-specific parameter substitutions (e.g.
+            `{ "city": "Berlin", "field": "Software Engineering" }`)
           example:
             city: Berlin
             field: Software Engineering
