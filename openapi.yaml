@@ -1,192 +1,1302 @@
-openapi: '3.0.0'
-info:
-  version: 1.0.0
-  title: Sample API
-  description: >
-    This is a sample OpenAPI file included with the starter kit.
-
-    Replace this entire file with your own OpenAPI specification that fully
-    describes your API, including your endpoints, schemas, authentication,
-    and error handling. Use this sample only as a structural reference, not
-    as a starting point for a production API definition.
-  license:
-    name: MIT
-servers:
-  - url: https://api.example.com/v1
+openapi: 3.0.0
 paths:
-  /projects:
-    get:
-      summary: List all projects
-      operationId: listProjects
-      parameters:
-        - name: limit
-          in: query
-          description: How many items to return at one time (max 100)
-          required: false
-          schema:
-            type: integer
-            format: int32
-      responses:
-        200:
-          description: An paged array of projects
-          headers:
-            x-next:
-              description: A link to the next page of responses
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Projects'
-        default:
-          description: unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+  /api/v1/search:
     post:
-      summary: Create project
-      operationId: createProjects
+      operationId: SearchController_search
+      summary: Search content with filters, facets, and geo
+      description: >-
+        Full-featured content search across all indexed teasers. Supports text
+        search with multilingual analyzers, classification filters, temporal
+        filters, geographic distance/bounding-box, publisher filters, custom
+        aggregations, sorting, and pagination.
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequestDto'
       responses:
-        201:
-          description: Null response
-        default:
-          description: unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /projects/{projectId}:
+        '201':
+          description: ''
+      tags:
+        - search
+  /api/v1/search/by-goal:
+    post:
+      operationId: SearchController_searchByGoal
+      summary: Search content by goal template
+      description: >-
+        Goal-driven search that loads a filterset template from schemas/goals/,
+        substitutes user-provided parameters (e.g. {{city}}), executes multiple
+        content queries in parallel, and returns merged, deduplicated results
+        ranked by relevance.
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalSearchDto'
+      responses:
+        '201':
+          description: ''
+      tags:
+        - search
+  /api/v1/search/suggestions:
     get:
-      summary: Get project info
-      operationId: showProjectById
+      operationId: SearchController_getSuggestions
+      summary: Get search autocomplete suggestions
+      description: >-
+        Returns up to 8 headline-based suggestions using phrase_prefix and fuzzy
+        matching. Cached for 60 seconds.
       parameters:
-        - name: projectId
-          in: path
+        - name: q
           required: true
-          description: The id of the project to retrieve
+          in: query
+          description: Search query (min 2 characters)
+          schema:
+            example: renewable energy
+            type: string
+        - name: content_types
+          required: false
+          in: query
+          description: Comma-separated content types to limit suggestions
+          schema:
+            example: news,events
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - search
+  /api/v1/embedding/status:
+    get:
+      operationId: EmbeddingController_getStatus
+      summary: Get embedding service status
+      description: Returns model info and outdated document counts.
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - embedding
+  /api/v1/embedding/refresh:
+    post:
+      operationId: EmbeddingController_triggerRefresh
+      summary: Trigger embedding refresh (admin)
+      description: >-
+        Manually triggers re-embedding of documents with missing or outdated
+        embeddings.
+      parameters:
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key
+          required: true
           schema:
             type: string
       responses:
-        200:
-          description: Expected response to a valid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Projects'
-        default:
-          description: unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /documents:
-    get:
-      summary: List all documents
-      operationId: listDocuments
-      parameters:
-        - name: limit
-          in: query
-          description: How many items to return at one time (max 100)
-          required: false
-          schema:
-            type: integer
-            format: int32
-      responses:
-        200:
-          description: An paged array of documents
-          headers:
-            x-next:
-              description: A link to the next page of responses
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Documents'
-        default:
-          description: unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+        '201':
+          description: ''
+      tags:
+        - embedding
+  /api/v1/embedding/similar/{teaserId}:
     post:
-      summary: Create document
-      operationId: createDocuments
-      responses:
-        201:
-          description: Null response
-        default:
-          description: unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /documents/{docId}:
-    get:
-      summary: Get document info
-      operationId: showDocumentById
+      operationId: EmbeddingController_findSimilar
+      summary: Find similar teasers (more like this)
+      description: >-
+        Returns teasers with the most similar embedding vectors to the given
+        teaser.
       parameters:
-        - name: docId
-          in: path
+        - name: teaserId
           required: true
-          description: The id of the document to retrieve
+          in: path
+          schema:
+            type: string
+        - name: limit
+          required: false
+          in: query
+          schema:
+            type: number
+        - name: index
+          required: false
+          in: query
           schema:
             type: string
       responses:
-        200:
-          description: Expected response to a valid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Documents'
-        default:
-          description: unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+        '201':
+          description: ''
+      tags:
+        - embedding
+  /api/v1/embedding/search:
+    post:
+      operationId: EmbeddingController_semanticSearch
+      summary: Semantic vector search
+      description: >-
+        Search using a text query converted to an embedding vector. Returns
+        results ranked by cosine similarity.
+      parameters: []
+      responses:
+        '201':
+          description: ''
+      tags:
+        - embedding
+  /api/v1/stats/dashboard:
+    get:
+      operationId: StatisticsController_getDashboard
+      summary: Get combined dashboard statistics
+      description: >-
+        Returns index stats, publisher stats, query performance, and recent
+        daily stats.
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - statistics
+  /api/v1/stats/index:
+    get:
+      operationId: StatisticsController_getIndexStats
+      summary: Get index statistics
+      description: Document counts per content type, store sizes, index health.
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - statistics
+  /api/v1/stats/publishers:
+    get:
+      operationId: StatisticsController_getPublisherStats
+      summary: Get publisher statistics
+      description: Publisher counts by type, verification status, and trust level.
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - statistics
+  /api/v1/stats/performance:
+    get:
+      operationId: StatisticsController_getPerformance
+      summary: Get query performance metrics
+      description: In-memory latency percentiles (p50, p95, p99) and query count.
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - statistics
+  /api/v1/stats/daily:
+    get:
+      operationId: StatisticsController_getDailyStats
+      summary: Get daily statistics history
+      parameters:
+        - name: days
+          required: false
+          in: query
+          description: 'Number of days to look back (default: 30)'
+          schema:
+            type: number
+      responses:
+        '200':
+          description: ''
+      tags:
+        - statistics
+  /api/v1/publishers/register:
+    post:
+      operationId: PublishersController_register
+      summary: Register a new publisher
+      description: >-
+        Registers a new publisher with the discovery node. Returns the publisher
+        record and a one-time API key. Optionally verifies domain ownership via
+        DNS TXT record.
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterPublisherDto'
+      responses:
+        '201':
+          description: ''
+      tags:
+        - publishers
+  /api/v1/publishers:
+    get:
+      operationId: PublishersController_findAll
+      summary: List all publishers
+      parameters:
+        - name: type
+          required: false
+          in: query
+          schema:
+            type: string
+        - name: status
+          required: false
+          in: query
+          schema:
+            type: string
+        - name: trust_level
+          required: false
+          in: query
+          schema:
+            type: string
+        - name: skip
+          required: false
+          in: query
+          schema:
+            type: number
+        - name: take
+          required: false
+          in: query
+          schema:
+            type: number
+      responses:
+        '200':
+          description: ''
+      tags:
+        - publishers
+  /api/v1/publishers/{id}:
+    get:
+      operationId: PublishersController_findById
+      summary: Get publisher by ID
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - publishers
+    put:
+      operationId: PublishersController_update
+      summary: Update publisher details (admin)
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePublisherDto'
+      responses:
+        '200':
+          description: ''
+      tags:
+        - publishers
+  /api/v1/publishers/{id}/rotate-key:
+    post:
+      operationId: PublishersController_rotateApiKey
+      summary: Rotate publisher API key (admin)
+      description: >-
+        Generates a new API key for the publisher. The old key is immediately
+        invalidated.
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: ''
+      tags:
+        - publishers
+  /api/v1/publishers/{id}/verify-domain:
+    post:
+      operationId: PublishersController_verifyDomain
+      summary: Retry domain verification
+      description: >-
+        Re-checks DNS TXT record at _roadbeat.{domain} for the verification
+        token.
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        '201':
+          description: ''
+      tags:
+        - publishers
+  /api/v1/publishers/{id}/suspend:
+    post:
+      operationId: PublishersController_suspend
+      summary: Suspend a publisher (admin)
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: ''
+      tags:
+        - publishers
+  /api/v1/publishers/{id}/stats:
+    get:
+      operationId: PublishersController_getStats
+      summary: Get publisher statistics
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - publishers
+  /api/v1/teasers:
+    post:
+      operationId: IngestController_publishTeaser
+      summary: Publish a teaser
+      description: >-
+        Index a new content teaser into Elasticsearch. The teaser is validated,
+        optionally signature-verified, and indexed into the
+        content-type-specific index (roadbeat-content-{type}).
+      parameters:
+        - name: X-Publisher-Key
+          in: header
+          description: Publisher API key for authentication
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishTeaserDto'
+      responses:
+        '201':
+          description: ''
+      tags:
+        - teasers
+  /api/v1/teasers/{teaserId}:
+    put:
+      operationId: IngestController_updateTeaser
+      summary: Update a teaser
+      description: >-
+        Update an existing teaser. Publisher must own the teaser. Increments the
+        teaser_version counter.
+      parameters:
+        - name: X-Publisher-Key
+          in: header
+          description: Publisher API key for authentication
+          required: true
+          schema:
+            type: string
+        - name: teaserId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishTeaserDto'
+      responses:
+        '200':
+          description: ''
+      tags:
+        - teasers
+    delete:
+      operationId: IngestController_removeTeaser
+      summary: Remove a teaser
+      description: Delete a teaser from the index. Publisher must own the teaser.
+      parameters:
+        - name: X-Publisher-Key
+          in: header
+          description: Publisher API key for authentication
+          required: true
+          schema:
+            type: string
+        - name: teaserId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - teasers
+    get:
+      operationId: IngestController_getTeaser
+      summary: Get a teaser by ID
+      parameters:
+        - name: X-Publisher-Key
+          in: header
+          description: Publisher API key for authentication
+          required: true
+          schema:
+            type: string
+        - name: teaserId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - teasers
+  /api/v1/teasers/batch:
+    post:
+      operationId: IngestController_batchOperations
+      summary: Batch operations (max 100)
+      description: >-
+        Execute multiple index/update/delete operations in a single request.
+        Each operation is processed sequentially with individual error handling.
+      parameters:
+        - name: X-Publisher-Key
+          in: header
+          description: Publisher API key for authentication
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchOperationsDto'
+      responses:
+        '201':
+          description: ''
+      tags:
+        - teasers
+  /api/v1/nodes:
+    get:
+      operationId: NodesController_getDirectory
+      summary: Get node directory
+      description: >-
+        Returns all healthy/degraded peer discovery nodes. Used by clients to
+        find the best node for their region/content type.
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - nodes
+  /api/v1/nodes/all:
+    get:
+      operationId: NodesController_getAllNodes
+      summary: Get all nodes (admin)
+      description: Returns all nodes including unhealthy/offline ones.
+      parameters:
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - nodes
+  /api/v1/nodes/{nodeId}:
+    get:
+      operationId: NodesController_getNode
+      summary: Get node by ID
+      parameters:
+        - name: nodeId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - nodes
+    put:
+      operationId: NodesController_updateNode
+      summary: Update node info (admin)
+      parameters:
+        - name: nodeId
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - nodes
+    delete:
+      operationId: NodesController_removeNode
+      summary: Remove a node from directory (admin)
+      parameters:
+        - name: nodeId
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - nodes
+  /api/v1/nodes/register:
+    post:
+      operationId: NodesController_registerNode
+      summary: Register a peer node (admin)
+      description: >-
+        Register a new discovery node in the peer directory. Returns the node
+        info with assigned node_id.
+      parameters:
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: ''
+      tags:
+        - nodes
+  /api/v1/nodes/{nodeId}/heartbeat:
+    post:
+      operationId: NodesController_heartbeat
+      summary: Node heartbeat
+      description: >-
+        Called periodically by peer nodes to signal liveness. Optionally
+        includes stats update.
+      parameters:
+        - name: nodeId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        '201':
+          description: ''
+      tags:
+        - nodes
+  /api/v1/admin/config:
+    get:
+      operationId: AdminController_getNodeConfig
+      summary: Get node configuration
+      parameters:
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key for authentication
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - admin
+    put:
+      operationId: AdminController_upsertNodeConfig
+      summary: Create or update node configuration
+      description: >-
+        Upserts the node identity, operator info, content types, region, and
+        legal HTML.
+      parameters:
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key for authentication
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - admin
+  /api/v1/admin/cache/stats:
+    get:
+      operationId: AdminController_getCacheStats
+      summary: Get Redis cache statistics
+      parameters:
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key for authentication
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - admin
+  /api/v1/admin/cache/invalidate:
+    post:
+      operationId: AdminController_invalidateCache
+      summary: Invalidate cache by pattern
+      description: >-
+        Pass { "pattern": "search:*" } to clear search cache, or { "pattern":
+        "all" } to clear everything.
+      parameters:
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key for authentication
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: ''
+      tags:
+        - admin
+  /api/v1/admin/cache/invalidate/search:
+    post:
+      operationId: AdminController_invalidateSearchCache
+      summary: Invalidate search and suggestions cache
+      parameters:
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key for authentication
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: ''
+      tags:
+        - admin
+  /api/v1/admin/elasticsearch/health:
+    get:
+      operationId: AdminController_getClusterHealth
+      summary: Get Elasticsearch cluster health
+      parameters:
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key for authentication
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - admin
+  /api/v1/admin/elasticsearch/refresh:
+    post:
+      operationId: AdminController_refreshIndices
+      summary: Refresh all content indices
+      description: Forces near-real-time visibility of recently indexed documents.
+      parameters:
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key for authentication
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: ''
+      tags:
+        - admin
+  /api/v1/admin/incidents:
+    get:
+      operationId: AdminController_getIncidents
+      summary: Get recent incidents
+      parameters:
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key for authentication
+          required: true
+          schema:
+            type: string
+        - name: limit
+          required: false
+          in: query
+          schema:
+            type: number
+      responses:
+        '200':
+          description: ''
+      tags:
+        - admin
+    post:
+      operationId: AdminController_createIncident
+      summary: Create an incident
+      parameters:
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key for authentication
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: ''
+      tags:
+        - admin
+  /api/v1/admin/incidents/{id}/resolve:
+    post:
+      operationId: AdminController_resolveIncident
+      summary: Resolve an incident
+      parameters:
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key for authentication
+          required: true
+          schema:
+            type: string
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        '201':
+          description: ''
+      tags:
+        - admin
+  /api/web/v1/node-info:
+    get:
+      operationId: WebsiteController_getNodeInfo
+      summary: Node identity and operator info
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - website
+  /api/web/v1/metrics:
+    get:
+      operationId: WebsiteController_getMetrics
+      summary: Homepage metrics bar data
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - website
+  /api/web/v1/content-types:
+    get:
+      operationId: WebsiteController_getContentTypes
+      summary: Content types with document counts
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - website
+  /api/web/v1/publishers:
+    get:
+      operationId: WebsiteController_getPublishers
+      summary: Publishers list (public fields)
+      parameters:
+        - name: page
+          required: false
+          in: query
+          schema:
+            type: number
+        - name: limit
+          required: false
+          in: query
+          schema:
+            type: number
+        - name: type
+          required: false
+          in: query
+          schema:
+            type: string
+        - name: status
+          required: false
+          in: query
+          schema:
+            type: string
+        - name: sort
+          required: false
+          in: query
+          schema:
+            type: string
+        - name: order
+          required: false
+          in: query
+          schema:
+            enum:
+              - asc
+              - desc
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - website
+  /api/web/v1/health:
+    get:
+      operationId: WebsiteController_getHealth
+      summary: Component health status for health page
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - website
+  /api/web/v1/incidents:
+    get:
+      operationId: WebsiteController_getIncidents
+      summary: Recent incidents
+      parameters:
+        - name: limit
+          required: false
+          in: query
+          schema:
+            type: number
+      responses:
+        '200':
+          description: ''
+      tags:
+        - website
+  /api/web/v1/legal/{page}:
+    get:
+      operationId: WebsiteController_getLegalContent
+      summary: Legal page content (imprint, privacy, terms)
+      parameters:
+        - name: page
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+      tags:
+        - website
+  /health:
+    get:
+      operationId: HealthController_health
+      summary: Health check for all components
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - health
+  /ready:
+    get:
+      operationId: HealthController_ready
+      summary: Readiness probe for load balancers
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - health
+info:
+  title: roadbeat Discovery Node API
+  description: >-
+    Distributed search and content discovery server for the roadbeat ecosystem.
+    Provides faceted search, geographic filtering, goal-driven discovery, and
+    semantic search.
+  version: 1.0.0
+  contact: {}
+tags:
+  - name: search
+    description: Content search and discovery
+  - name: teasers
+    description: Content teaser ingest
+  - name: publishers
+    description: Publisher management
+  - name: nodes
+    description: Node directory and federation
+  - name: health
+    description: Health checks and status
+  - name: stats
+    description: Statistics and metrics
+  - name: web
+    description: Website internal API
+servers:
+  - url: https://discover.roadbeat.net
+    description: Production
+  - url: http://localhost:3300
+    description: Local Development
 components:
+  securitySchemes:
+    publisher-key:
+      type: apiKey
+      in: header
+      name: X-Publisher-Key
+    bearer:
+      scheme: bearer
+      bearerFormat: JWT
+      type: http
   schemas:
-    Project:
-      required:
-        - id
-        - name
+    SearchQueryDto:
+      type: object
       properties:
-        id:
-          type: integer
-          format: int64
+        text:
+          type: string
+          description: Full-text search query string
+          example: renewable energy Germany
+        fields:
+          description: >-
+            Fields to search (with optional boosting). Defaults to headline +
+            description + tags.
+          example:
+            - overview.headline.de^3
+            - overview.description.en^2
+          type: array
+          items:
+            type: string
+    GeoPointDto:
+      type: object
+      properties:
+        lat:
+          type: number
+          example: 52.52
+        lon:
+          type: number
+          example: 13.405
+      required:
+        - lat
+        - lon
+    GeoFilterDto:
+      type: object
+      properties:
+        center:
+          description: Center point for geo distance search
+          allOf:
+            - $ref: '#/components/schemas/GeoPointDto'
+        distance:
+          type: string
+          description: Maximum distance from center (e.g. "50km", "100mi")
+          example: 50km
+      required:
+        - center
+        - distance
+    GeoBoundingBoxDto:
+      type: object
+      properties:
+        top_left:
+          description: Top-left corner
+          allOf:
+            - $ref: '#/components/schemas/GeoPointDto'
+        bottom_right:
+          description: Bottom-right corner
+          allOf:
+            - $ref: '#/components/schemas/GeoPointDto'
+      required:
+        - top_left
+        - bottom_right
+    PaginationDto:
+      type: object
+      properties:
+        from:
+          type: number
+          description: Offset (0-indexed)
+          default: 0
+        size:
+          type: number
+          description: Number of results per page
+          default: 20
+    SearchRequestDto:
+      type: object
+      properties:
+        query:
+          description: Text search query
+          allOf:
+            - $ref: '#/components/schemas/SearchQueryDto'
+        content_types:
+          description: Content types to search (e.g. ["news", "events"])
+          example:
+            - news
+          type: array
+          items:
+            type: string
+        filters:
+          type: object
+          description: Filter map. Keys are dot-path field names, values are filter values.
+          example:
+            classification.categories:
+              - politics
+              - economy
+            classification.tags:
+              - climate
+            temporal.date_published:
+              gte: '2026-01-01'
+              lte: '2026-12-31'
+            geographic.country_codes:
+              - DE
+              - AT
+            access.is_free: true
+            access.languages:
+              - de
+              - en
+            publisher.verified: true
+            publisher.trust_level:
+              - established
+              - trusted
+        geo:
+          description: Geographic distance filter
+          allOf:
+            - $ref: '#/components/schemas/GeoFilterDto'
+        geo_bounding_box:
+          description: Bounding box filter
+          allOf:
+            - $ref: '#/components/schemas/GeoBoundingBoxDto'
+        sort:
+          description: >-
+            Sort order. Array of { field: "asc"|"desc" } objects. Default:
+            relevance then date.
+          example:
+            - temporal.date_published: desc
+          type: array
+          items:
+            type: string
+        pagination:
+          description: Pagination options
+          allOf:
+            - $ref: '#/components/schemas/PaginationDto'
+        aggregations:
+          type: object
+          description: >-
+            Custom aggregation definitions. If omitted, default facets are
+            returned.
+        highlight:
+          type: boolean
+          description: Whether to include highlights in results
+          default: true
+        search_mode:
+          type: string
+          description: >-
+            Enable semantic (vector) search. "hybrid" combines BM25 keyword +
+            kNN vector scoring. "semantic_only" uses pure vector search.
+            Default: keyword only (no vectors).
+          enum:
+            - hybrid
+            - semantic_only
+        keyword_weight:
+          type: number
+          description: >-
+            Weight for keyword (BM25) score in hybrid mode (0.0-1.0). Vector
+            weight = 1 - keyword_weight. Default: 0.7 (favor keywords).
+          default: 0.7
+    UserContextDto:
+      type: object
+      properties:
+        location:
+          type: object
+          description: User location (for geographic relevance)
+        languages:
+          description: Preferred languages
+          example:
+            - de
+            - en
+          type: array
+          items:
+            type: string
+        preferred_content_types:
+          description: User preferred content types
+          type: array
+          items:
+            type: string
+    GoalSearchDto:
+      type: object
+      properties:
+        goal_template_id:
+          type: string
+          description: >-
+            Goal template ID (path in schemas/goals/, e.g.
+            "personal/career-job-search")
+          example: personal/career-job-search
+        goal_parameters:
+          type: object
+          description: >-
+            Goal-specific parameter substitutions (e.g. { "city": "Berlin",
+            "field": "Software Engineering" })
+          example:
+            city: Berlin
+            field: Software Engineering
+        user_context:
+          description: User context for relevance tuning
+          allOf:
+            - $ref: '#/components/schemas/UserContextDto'
+        results_per_query:
+          type: number
+          description: Max results per content query
+          default: 10
+        max_total_results:
+          type: number
+          description: Max total results across all queries
+          default: 50
+      required:
+        - goal_template_id
+    PublisherContactDto:
+      type: object
+      properties:
         name:
           type: string
-        description:
+          example: John Doe
+        email:
           type: string
-    Projects:
-      type: array
-      items:
-        $ref: '#/components/schemas/Project'
-    Document:
+          example: publisher@example.com
       required:
-        - id
-        - title
+        - name
+        - email
+    RegisterPublisherDto:
+      type: object
       properties:
-        id:
-          type: integer
-          format: int64
-        title:
+        name:
           type: string
-        content:
+          description: Publisher display name
+          example: EnergyNews DE
+        type:
           type: string
-    Documents:
-      type: array
-      items:
-        $ref: '#/components/schemas/Document'
-    Error:
+          description: Publisher type
+          enum:
+            - media
+            - organization
+            - government
+            - individual
+            - academic
+          example: media
+        domain:
+          type: string
+          description: Publisher domain for verification
+          example: energynews.de
+        studio_node_url:
+          type: string
+          description: Studio node URL for callback communication
+          example: https://studio.energynews.de
+        public_key:
+          type: string
+          description: PEM-encoded Ed25519 public key for teaser signature verification
+        content_types:
+          description: Content types this publisher will publish
+          example:
+            - news
+            - events
+          type: array
+          items:
+            type: string
+        contact:
+          description: Publisher contact information
+          allOf:
+            - $ref: '#/components/schemas/PublisherContactDto'
+        verification_token:
+          type: string
+          description: >-
+            DNS TXT record verification token (set _roadbeat.example.com TXT
+            "roadbeat-verify=TOKEN")
+          example: abc123-verification-token
       required:
-        - code
-        - message
+        - name
+        - type
+        - domain
+        - public_key
+        - content_types
+        - contact
+    UpdatePublisherDto:
+      type: object
       properties:
-        code:
-          type: integer
-          format: int32
-        message:
+        name:
           type: string
+        type:
+          type: string
+        studio_node_url:
+          type: string
+        public_key:
+          type: string
+        content_types:
+          type: array
+          items:
+            type: string
+        contact:
+          $ref: '#/components/schemas/PublisherContactDto'
+    PublishTeaserDto:
+      type: object
+      properties:
+        content_type:
+          type: string
+          description: Content type (must match an existing index pattern)
+          example: news
+        teaser:
+          type: object
+          description: Full teaser document conforming to the content index template
+        signature:
+          type: string
+          description: Base64-encoded Ed25519 signature of the canonical teaser JSON
+      required:
+        - content_type
+        - teaser
+    BatchOperationDto:
+      type: object
+      properties:
+        action:
+          type: string
+          description: Operation type
+          enum:
+            - index
+            - update
+            - delete
+        content_type:
+          type: string
+          description: Content type
+        teaser_id:
+          type: string
+          description: Teaser ID (required for update/delete)
+        teaser:
+          type: object
+          description: Teaser document (required for index/update)
+        signature:
+          type: string
+          description: Signature for the teaser
+      required:
+        - action
+        - content_type
+    BatchOperationsDto:
+      type: object
+      properties:
+        operations:
+          description: Array of batch operations (max 100)
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchOperationDto'
+      required:
+        - operations
