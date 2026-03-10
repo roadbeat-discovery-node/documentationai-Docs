@@ -1,5 +1,5 @@
 {
-  "name": "Starter Kit",
+  "name": "roadbeat Discovery Node",
   "colors": {
     "light": {
       "brand": "#F97316"
@@ -15,7 +15,7 @@
         "icon": "book",
         "groups": [
           {
-            "group": "Start Here",
+            "group": "Getting Started",
             "icon": "rocket",
             "pages": [
               {
@@ -29,45 +29,82 @@
                 "icon": "zap"
               },
               {
-                "title": "Components",
-                "path": "components",
-                "icon": "code"
+                "title": "Core Concepts",
+                "path": "concepts",
+                "icon": "layers"
               }
             ]
           },
           {
-            "group": "Components",
-            "icon": "layers",
+            "group": "Architecture",
+            "icon": "server",
             "pages": [
               {
-                "title": "Images",
-                "path": "components/images",
-                "icon": "image"
+                "title": "System Architecture",
+                "path": "architecture/overview",
+                "icon": "cpu"
               },
               {
-                "title": "Cards",
-                "path": "components/cards",
-                "icon": "square"
+                "title": "Data Model",
+                "path": "architecture/data-model",
+                "icon": "database"
               },
               {
-                "title": "Code",
-                "path": "components/code",
-                "icon": "code"
+                "title": "Federation & Nodes",
+                "path": "architecture/federation",
+                "icon": "network"
+              }
+            ]
+          },
+          {
+            "group": "Features",
+            "icon": "star",
+            "pages": [
+              {
+                "title": "Search & Discovery",
+                "path": "features/search",
+                "icon": "search"
               },
               {
-                "title": "Callouts",
-                "path": "components/callouts",
-                "icon": "message-square"
+                "title": "Faceted Filtering",
+                "path": "features/facets",
+                "icon": "filter"
               },
               {
-                "title": "Steps",
-                "path": "components/steps",
-                "icon": "list-ordered"
+                "title": "Content Ingest",
+                "path": "features/ingest",
+                "icon": "upload"
               },
               {
-                "title": "Tabs",
-                "path": "components/tabs",
-                "icon": "columns"
+                "title": "Publisher Management",
+                "path": "features/publishers",
+                "icon": "building"
+              },
+              {
+                "title": "Semantic Search",
+                "path": "features/semantic-search",
+                "icon": "brain"
+              },
+              {
+                "title": "Transparency Website",
+                "path": "features/website",
+                "icon": "globe"
+              }
+            ]
+          },
+          {
+            "group": "Deployment",
+            "icon": "cloud",
+            "pages": [
+              {
+                "title": "Configuration",
+                "path": "deployment/configuration",
+                "icon": "settings"
+              },
+              {
+                "title": "Self-Hosting",
+                "path": "deployment/self-hosting",
+                "icon": "hard-drive"
               }
             ]
           }
@@ -82,14 +119,19 @@
             "icon": "file-text",
             "pages": [
               {
+                "title": "API Overview",
+                "path": "api-reference/overview",
+                "icon": "book-open"
+              },
+              {
                 "title": "Authentication",
-                "path": "authentication",
+                "path": "api-reference/authentication",
                 "icon": "lock"
               }
             ]
           },
           {
-            "group": "Sample Endpoints",
+            "group": "Endpoints",
             "openapi": "openapi.yaml"
           }
         ]
@@ -109,8 +151,14 @@
             "expandable": false,
             "pages": [
               {
-                "title": "Documentation Source",
-                "path": "help-center/faq/getting-started"
+                "title": "General Questions",
+                "path": "help-center/faq/general",
+                "icon": "message-circle"
+              },
+              {
+                "title": "Publisher FAQ",
+                "path": "help-center/faq/publishers",
+                "icon": "building"
               }
             ]
           },
@@ -120,8 +168,9 @@
             "expandable": false,
             "pages": [
               {
-                "title": "Page Missing in Sidebar",
-                "path": "help-center/troubleshooting/install-error"
+                "title": "Common Issues",
+                "path": "help-center/troubleshooting/common-issues",
+                "icon": "alert-circle"
               }
             ]
           },
@@ -131,8 +180,14 @@
             "expandable": false,
             "pages": [
               {
-                "title": "Create Your First Page",
-                "path": "help-center/guides/setup-project"
+                "title": "Publishing Your First Teaser",
+                "path": "help-center/guides/first-teaser",
+                "icon": "file-plus"
+              },
+              {
+                "title": "Domain Verification",
+                "path": "help-center/guides/domain-verification",
+                "icon": "shield-check"
               }
             ]
           }

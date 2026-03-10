@@ -1,0 +1,218 @@
+---
+title: Data Model
+description: Elasticsearch index structure and PostgreSQL schema for the Discovery Node.
+---
+
+The Discovery Node uses two data stores: **Elasticsearch** for content search and **PostgreSQL** for relational metadata. This page documents both.
+
+## Elasticsearch: teaser documents
+
+Every indexed teaser follows a structured document format within a content-type-specific index.
+
+### Index naming
+
+Indices follow the pattern `roadbeat-content-{type}`:
+
+- `roadbeat-content-news`
+- `roadbeat-content-events`
+- `roadbeat-content-jobs`
+- `roadbeat-content-recipes`
+
+A wildcard pattern `roadbeat-content-*` searches across all content types.
+
+### Teaser document structure
+
+```json
+{
+  "teaser_id": "uuid",
+  "content_type": "news",
+
+  "identifier": {
+    "content_id": "article-123",
+    "publisher_id": "publisher-abc",
+    "slug": "chancellor-announces-climate-policy",
+    "canonical_url": "https://publisher.com/news/chancellor-climate-policy"
+  },
+
+  "overview": {
+    "headline": {
+      "de": "Bundeskanzler kündigt neue Klimapolitik an",
+      "en": "Chancellor Announces New Climate Policy"
+    },
+    "description": {
+      "de": "Die Bundesregierung hat heute ein umfassendes Klimapaket vorgestellt.",
+      "en": "The federal government unveiled a comprehensive climate package today."
+    },
+    "hero_image": {
+      "url": "https://cdn.publisher.com/images/climate-policy.jpg",
+      "thumbnail_url": "https://cdn.publisher.com/images/climate-policy-thumb.jpg",
+      "alt_text": { "de": "Bundeskanzler am Rednerpult", "en": "Chancellor at podium" }
+    }
+  },
+
+  "classification": {
+    "article_type": "news_report",
+    "categories": ["politics", "environment"],
+    "topics": ["climate_policy", "government", "energy"],
+    "tags": ["climate", "policy", "federal_government"]
+  },
+
+  "temporal": {
+    "date_published": "2026-01-24T14:30:00Z",
+    "date_modified": "2026-01-24T16:00:00Z",
+    "event_date": null,
+    "expires_at": null
+  },
+
+  "geographic": {
+    "scope": "national",
+    "country_codes": ["DE"],
+    "locations": [
+      {
+        "name": "Berlin",
+        "type": "city",
+        "coordinates": { "lat": 52.52, "lon": 13.405 }
+      }
+    ]
+  },
+
+  "publisher": {
+    "id": "publisher-abc",
+    "name": "Deutsche Nachrichten",
+    "type": "newspaper",
+    "verified": true,
+    "trust_level": "established"
+  },
+
+  "access": {
+    "is_free": true,
+    "access_type": "free",
+    "languages": ["de", "en"]
+  },
+
+  "metadata": {
+    "word_count": 850,
+    "reading_time_minutes": 4,
+    "has_video": false,
+    "has_audio": false
+  },
+
+  "_roadbeat": {
+    "indexed_at": "2026-01-24T14:35:00Z",
+    "source_node": "studio-node-publisher-abc",
+    "teaser_version": 2,
+    "checksum": "sha256:abc123..."
+  },
+
+  "_semantic": {
+    "embedding_model": "text-embedding-3-small",
+    "embedding_version": "1.0.0",
+    "embedding_date": "2026-01-24T14:35:00Z",
+    "combined_vector": [0.123, -0.456, 0.789]
+  }
+}
+```
+
+### Index mapping highlights
+
+| Field path | ES type | Notes |
+|-----------|---------|-------|
+| `content_type` | `keyword` | Used for index routing |
+| `overview.headline.*` | `text` | Language-specific analyzers (German, English) |
+| `overview.description.*` | `text` | Language-specific analyzers |
+| `classification.categories` | `keyword` | Terms aggregation |
+| `classification.tags` | `keyword` | Terms aggregation |
+| `temporal.date_published` | `date` | Date histogram aggregation |
+| `geographic.locations` | `nested` | Nested with `geo_point` for distance queries |
+| `publisher.id` | `keyword` | Publisher filtering |
+| `access.is_free` | `boolean` | Boolean filter |
+| `_semantic.combined_vector` | `dense_vector` | 1536 dimensions, cosine similarity |
+
+<Callout kind="info">
+  The index template `roadbeat-content` is automatically created on API startup. It applies to all indices matching `roadbeat-content-*`.
+</Callout>
+
+## PostgreSQL: metadata tables
+
+PostgreSQL stores operational metadata via Prisma ORM. The database is **not** used for content search — only for publisher management, node configuration, statistics, and incidents.
+
+### Publishers
+
+Stores registered publisher accounts with verification status and hashed API keys.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID (PK) | Publisher identifier |
+| `name` | VARCHAR(200) | Display name |
+| `type` | VARCHAR(50) | newspaper, magazine, blog, organization, etc. |
+| `domain` | VARCHAR(200) UNIQUE | Publisher domain for verification |
+| `public_key` | TEXT | Ed25519 public key (base64) |
+| `content_types` | TEXT[] | Allowed content types |
+| `verification_status` | VARCHAR(30) | unverified, domain_verified, organization_verified, trusted |
+| `trust_level` | VARCHAR(20) | new, established, trusted, suspended |
+| `rate_limits` | JSONB | `{ teasers_per_day, requests_per_minute }` |
+| `api_key_hash` | VARCHAR(128) | SHA-256 hash of the publisher's API key |
+| `document_count` | INT | Teaser count |
+| `is_active` | BOOLEAN | Active status |
+
+### Node config
+
+Stores the node's identity, operator information, and legal content. A single row with `id = "main"`.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `node_id` | VARCHAR(100) UNIQUE | Node identifier in the network |
+| `node_name` | VARCHAR(200) | Display name |
+| `operator_name` | VARCHAR(200) | Operator organization name |
+| `operator_email` | VARCHAR(200) | Operator contact email |
+| `region` | VARCHAR(50) | Geographic region (e.g. "EU") |
+| `description` | JSONB | Multilingual description `{ "en": "...", "de": "..." }` |
+| `content_types` | JSONB | Supported content type IDs |
+| `imprint_html` | JSONB | Multilingual legal imprint HTML |
+| `privacy_html` | JSONB | Multilingual privacy policy HTML |
+| `terms_html` | JSONB | Multilingual terms of service HTML |
+
+### Daily stats
+
+Aggregated daily snapshots for the statistics dashboard and charts.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `date` | DATE (UNIQUE) | Snapshot date |
+| `total_documents` | BIGINT | Total indexed teasers |
+| `documents_added` | INT | New teasers today |
+| `documents_removed` | INT | Removed teasers today |
+| `documents_by_type` | JSONB | Per-content-type counts |
+| `total_queries` | INT | Search queries today |
+| `avg_latency_ms` | FLOAT | Average query latency |
+| `p95_latency_ms` | FLOAT | 95th percentile latency |
+| `total_publishers` | INT | Publisher count |
+| `uptime_percent` | FLOAT | Uptime percentage |
+
+### Incidents
+
+Tracks operational incidents displayed on the health/status page.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | CUID (PK) | Incident identifier |
+| `severity` | VARCHAR(20) | info, warning, critical |
+| `title` | VARCHAR(500) | Incident summary |
+| `description` | TEXT | Detailed description |
+| `started_at` | TIMESTAMP | Incident start time |
+| `resolved_at` | TIMESTAMP | Resolution time (null if ongoing) |
+| `affected_components` | JSONB | Array of affected services |
+
+### Discovery nodes (peer directory)
+
+Tracks peer Discovery Nodes for federation.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `node_id` | VARCHAR(100) UNIQUE | Peer node identifier |
+| `endpoint` | VARCHAR(500) | API endpoint URL |
+| `content_types` | TEXT[] | Content types served |
+| `regions` | TEXT[] | Geographic regions |
+| `status` | VARCHAR(20) | healthy, degraded, unhealthy, offline |
+| `last_seen_at` | TIMESTAMP | Last heartbeat time |
+| `stats` | JSONB | Latest stats snapshot |

@@ -1,0 +1,103 @@
+---
+title: Configuration
+description: Environment variables and configuration options for the Discovery Node.
+---
+
+The Discovery Node is configured entirely via environment variables. This page documents all available options.
+
+## Required variables
+
+These must be set for the API to start:
+
+| Variable | Example | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `postgresql://postgres:pass@localhost:5432/roadbeat_discovery_node` | PostgreSQL connection string |
+
+## Infrastructure
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_PORT` | `3300` | API server port |
+| `ELASTICSEARCH_URL` | `http://localhost:9200` | Elasticsearch endpoint |
+| `ELASTICSEARCH_USERNAME` | — | ES basic auth username (optional) |
+| `ELASTICSEARCH_PASSWORD` | — | ES basic auth password (optional) |
+| `REDIS_URL` | `redis://localhost:6379` | Redis connection URL |
+| `NATS_URL` | `nats://localhost:4222` | NATS JetStream URL |
+
+## Security
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ADMIN_API_KEY` | — | Admin API key for protected endpoints. If unset, admin endpoints return 401. |
+| `CORS_ORIGIN` | `*` | Allowed CORS origins. Comma-separated for multiple (e.g. `https://app.roadbeat.net,https://admin.roadbeat.net`) |
+| `NODE_ENV` | `development` | Set to `production` to enable CSP headers and stricter security |
+
+<Callout kind="alert">
+  In production, always set `ADMIN_API_KEY` to a strong random value and restrict `CORS_ORIGIN` to your domain(s). Never use wildcard CORS in production.
+</Callout>
+
+## Embedding / semantic search
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENAI_API_KEY` | — | OpenAI API key. Required for semantic search. If unset, embedding features are disabled. |
+| `OPENAI_API_URL` | `https://api.openai.com/v1/embeddings` | Embeddings API endpoint (override for proxies or compatible APIs) |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` | OpenAI embedding model name |
+| `EMBEDDING_DIMENSIONS` | `1536` | Vector dimensions (must match the model) |
+| `EMBEDDING_VERSION` | `1.0.0` | Version string for tracking model changes |
+
+<Callout kind="tip">
+  You can use any OpenAI-compatible embedding API by setting `OPENAI_API_URL` to a different endpoint (e.g. Azure OpenAI, local Ollama).
+</Callout>
+
+## Rate limiting
+
+Global rate limiting is configured in the application module:
+
+- **Global limit**: 120 requests/minute per IP (via @nestjs/throttler)
+- **Website API**: 120 requests/minute per IP (separate throttle)
+- **Per-publisher limits**: Configured per verification level (stored in the `rate_limits` JSONB column)
+
+## Startup validation
+
+The API performs environment validation at startup:
+
+<Steps>
+  <Step title="Critical checks">
+    `DATABASE_URL` must be set. Missing this variable causes an immediate exit with error code 1.
+  </Step>
+  <Step title="Security warnings">
+    Warnings are logged for:
+    - `ADMIN_API_KEY` not set (admin endpoints disabled)
+    - `CORS_ORIGIN` is wildcard in production
+  </Step>
+  <Step title="Optional service warnings">
+    Warnings are logged for:
+    - `ELASTICSEARCH_URL` not set (defaults to localhost:9200)
+    - `REDIS_URL` not set (defaults to localhost:6379)
+    - `OPENAI_API_KEY` not set (semantic search disabled)
+  </Step>
+</Steps>
+
+## Example .env file
+
+```bash
+# Database (required)
+DATABASE_URL="postgresql://postgres:password@localhost:5432/roadbeat_discovery_node"
+
+# Infrastructure
+API_PORT=3300
+ELASTICSEARCH_URL="http://localhost:9200"
+REDIS_URL="redis://localhost:6379"
+NATS_URL="nats://localhost:4222"
+
+# Security
+ADMIN_API_KEY="your-strong-random-admin-key"
+CORS_ORIGIN="http://localhost:3301"
+NODE_ENV=development
+
+# Semantic search (optional)
+OPENAI_API_KEY="sk-..."
+EMBEDDING_MODEL="text-embedding-3-small"
+EMBEDDING_DIMENSIONS=1536
+```

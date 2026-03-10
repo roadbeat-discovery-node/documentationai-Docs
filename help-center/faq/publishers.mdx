@@ -1,0 +1,60 @@
+---
+title: Publisher FAQ
+description: Frequently asked questions about publisher registration, verification, and content publishing.
+---
+
+<ExpandableGroup>
+  <Expandable title="How do I register as a publisher?" default-open="true">
+    Send a `POST` request to `/api/v1/publishers/register` with your organization details, Ed25519 public key, and the content types you intend to publish. The response includes your publisher record and a **one-time API key** — store it securely as it cannot be retrieved again.
+
+    See the [Publisher Management](/features/publishers) page for the full registration flow with examples.
+  </Expandable>
+
+  <Expandable title="I lost my API key. How do I get a new one?">
+    API keys cannot be retrieved after registration because they are stored as SHA-256 hashes. An administrator must rotate your key:
+
+    ```bash
+    curl -X POST http://localhost:3300/api/v1/publishers/{your-id}/rotate-key \
+      -H "X-Admin-Key: ADMIN_KEY"
+    ```
+
+    This generates a new key and immediately invalidates the old one. Contact the node operator if you don't have admin access.
+  </Expandable>
+
+  <Expandable title="What are the rate limits for publishers?">
+    Rate limits depend on your verification level:
+
+    | Level | Teasers/day | Requests/min |
+    |-------|-------------|--------------|
+    | Unverified | 100 | 60 |
+    | Domain verified | 1,000 | 120 |
+    | Organization verified | 10,000 | 300 |
+    | Trusted publisher | 100,000 | 1,000 |
+
+    [Verify your domain](/help-center/guides/domain-verification) to increase your limits.
+  </Expandable>
+
+  <Expandable title="What content types can I publish?">
+    You specify the content types during registration (e.g. `["news", "events"]`). You can only publish teasers for the types you registered for. To add new types, an admin can update your publisher record via `PUT /api/v1/publishers/:id`.
+  </Expandable>
+
+  <Expandable title="Do I need to sign my teasers?">
+    Content signing with Ed25519 is **optional** but recommended. If you provide a `public_key` during registration and include a `signature` with your teasers, the Discovery Node verifies the signature for content integrity. Unsigned teasers are accepted based on API key authentication alone.
+  </Expandable>
+
+  <Expandable title="Can I update or remove a published teaser?">
+    Yes. Use `PUT /api/v1/teasers/{teaserId}` to update and `DELETE /api/v1/teasers/{teaserId}` to remove. You must authenticate with your publisher API key and can only modify teasers you own.
+  </Expandable>
+
+  <Expandable title="What happens when I publish the same content ID twice?">
+    Elasticsearch document IDs follow the pattern `{publisher_id}:{content_id}`. Publishing the same content ID again overwrites the previous version — it acts as an upsert. The `teaser_version` counter increments automatically on updates.
+  </Expandable>
+
+  <Expandable title="How quickly are teasers searchable after publishing?">
+    Teasers are indexed with `refresh: wait_for`, meaning the API response is only sent after the document is visible in search results. Typical latency is under 1 second.
+  </Expandable>
+
+  <Expandable title="What does 'suspended' mean?">
+    A suspended publisher cannot authenticate or publish new content. Existing teasers remain in the index. Suspension is an admin action typically triggered by abuse detection. Contact the node operator to appeal.
+  </Expandable>
+</ExpandableGroup>

@@ -1,78 +1,94 @@
 ---
-title: Set Up Your Documentation
-description: 'A minimal, editable starting point for your own documentation site.'
+title: Introduction
+description: roadbeat Discovery Node — distributed search and content discovery for the roadbeat ecosystem.
 ---
-## Start here (5–10 minutes)
 
-1. Edit this page so it describes your product and audience.
+The **roadbeat Discovery Node** is a distributed search and content discovery server that indexes structured content teasers from verified publishers across the roadbeat network. It provides faceted search, geographic filtering, goal-driven discovery, and semantic search — all without tracking users or optimizing for engagement.
 
-2. Customize your onboarding flow in the [Quickstart](/quickstart) page.
-
-3. Delete or rewrite any sections and pages you do not plan to use.
-
-4. Invite a teammate to review the structure and concepts starting from [Core Concepts](/concepts).
-
-<Callout kind="alert" collapsed="false">
-  This site ships with placeholder content. Edit the text, links, and examples so they match your product before sharing it with others.
+<Callout kind="info">
+  Discovery Nodes are the "search engines" of roadbeat. Unlike traditional search engines, they are decentralized, content-type aware, goal-aligned, and privacy-preserving.
 </Callout>
 
-## What you get
+## What a Discovery Node does
 
-<Columns cols="3">
-  <Card title="Docs structure" href="/quickstart" icon="book-open" horizontal="false">
-    A clear navigation layout with starter pages you can rename or replace.
+<Columns cols={3}>
+  <Card title="Search & Filter" icon="search" href="/features/search">
+    Full-text search with multilingual analyzers, faceted filtering, geographic queries, and transparent relevance scoring.
   </Card>
 
-  <Card title="Components" href="#try-a-few-components" icon="layout-grid" horizontal="false" target="_self">
-    Prebuilt blocks like Callouts, Steps, Tabs, and Cards to keep pages clean.
+  <Card title="Content Ingest" icon="upload" href="/features/ingest">
+    Accept and index content teasers from verified publishers with signature verification and automatic embedding generation.
   </Card>
 
-  <Card title="API reference hook" href="/authentication" icon="code" horizontal="false">
-    A placeholder `openapi.yaml` you can swap with your real API spec.
-  </Card>
-</Columns>
-
-## Make your first edit
-
-<Steps>
-  <Step title="Rewrite this page" icon="edit" title-type="p">
-    Update the title, description, and sections in `introduction` so they reflect your product and documentation goals.
-  </Step>
-
-  <Step title="Customize Quickstart" icon="zap" title-type="p">
-    Replace the steps in `quickstart` with your real onboarding flow so new readers know exactly how to get started.
-  </Step>
-
-  <Step title="Remove or repurpose samples" icon="trash" title-type="p">
-    Delete unused sample sections and pages, or rewrite them with your own content to keep navigation focused.
-  </Step>
-</Steps>
-
-## Try a few components
-
-You can browse the component gallery in the [Components](/components) page for ready-to-use examples of Cards, Callouts, Steps, Tabs, and more.
-
-## Continue to the rest of the sample
-
-<Columns cols="2">
-  <Card title="Quickstart" href="/quickstart" icon="zap" horizontal="false">
-    See the minimal setup flow.
-  </Card>
-
-  <Card title="Core Concepts" href="/concepts" icon="layers" horizontal="false">
-    Learn how pages, navigation, and components fit together.
-  </Card>
-
-  <Card title="Components" href="/components" icon="code" horizontal="false">
-    A small gallery of built-in components.
-  </Card>
-
-  <Card title="Authentication" href="/authentication" icon="lock" horizontal="false">
-    Example layout for an auth guide.
-  </Card>
-
-  <Card title="Help Center" href="/help-center" icon="help-circle" horizontal="false">
-    Starter FAQ, guides, and troubleshooting templates.
+  <Card title="Goal-Driven Discovery" icon="target" href="/features/search#goal-based-search">
+    Match content to user goals using filterset templates with parameter substitution — no algorithmic feed.
   </Card>
 </Columns>
 
+<Columns cols={3}>
+  <Card title="Publisher Registry" icon="building" href="/features/publishers">
+    Register publishers with domain verification, trust levels, and per-publisher rate limits.
+  </Card>
+
+  <Card title="Semantic Search" icon="brain" href="/features/semantic-search">
+    Optional AI-powered vector search using OpenAI embeddings for hybrid BM25 + kNN similarity scoring.
+  </Card>
+
+  <Card title="Transparency Website" icon="globe" href="/features/website">
+    Public-facing Next.js dashboard showing node stats, publishers, content types, and health — in 24 EU languages.
+  </Card>
+</Columns>
+
+## Tech stack
+
+| Component | Technology |
+|-----------|------------|
+| **Runtime** | Node.js 20 LTS |
+| **API Framework** | NestJS 10.x |
+| **Search Engine** | Elasticsearch 8.11.4 |
+| **Database** | PostgreSQL 18.x (Prisma ORM) |
+| **Cache** | Redis 7 (ioredis) |
+| **Message Bus** | NATS JetStream 2.10 |
+| **Website** | Next.js 14 (App Router) |
+| **i18n** | next-intl v4 (24 EU locales) |
+| **Security** | Helmet, @nestjs/throttler, Ed25519 signatures |
+
+## What Discovery Nodes store vs. don't store
+
+<Tabs>
+  <Tab title="Stored" icon="database">
+    - **Teasers** — title, description, hero image, key metadata (not full content)
+    - **Filter facets** — all searchable/filterable metadata fields
+    - **Publisher info** — source identification, trust signals, verification status
+    - **Temporal data** — publication dates, event dates, expiration dates
+    - **Geographic data** — locations for geo-filtered queries
+    - **Embeddings** — vector representations for semantic search (generated server-side)
+  </Tab>
+  <Tab title="Not Stored" icon="shield">
+    - **Full content** — article bodies, full media, detailed data (stored at source)
+    - **User data** — no user profiles, no consumption history
+    - **Social graph** — no follower/following relationships
+    - **Payment data** — no transaction or pricing information
+    - **Behavioral data** — no tracking, no profiling, no engagement metrics
+  </Tab>
+</Tabs>
+
+## Next steps
+
+<Columns cols={2}>
+  <Card title="Quickstart" href="/quickstart" icon="zap">
+    Get a Discovery Node running locally in under 10 minutes.
+  </Card>
+
+  <Card title="Core Concepts" href="/concepts" icon="layers">
+    Understand teasers, content types, publishers, and goal-driven search.
+  </Card>
+
+  <Card title="API Reference" href="/api-reference/overview" icon="code">
+    Explore all REST API endpoints with examples.
+  </Card>
+
+  <Card title="Self-Hosting Guide" href="/deployment/self-hosting" icon="hard-drive">
+    Deploy a production Discovery Node with Docker.
+  </Card>
+</Columns>

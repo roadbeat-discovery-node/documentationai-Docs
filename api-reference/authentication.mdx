@@ -1,0 +1,177 @@
+---
+title: Authentication
+description: How to authenticate with the roadbeat Discovery Node API using publisher and admin API keys.
+---
+
+The Discovery Node API uses **API key authentication** via custom HTTP headers. There are two types of keys for different access levels.
+
+## Public endpoints (no auth required)
+
+Many endpoints are open and do not require any authentication:
+
+- `POST /api/v1/search` — content search
+- `POST /api/v1/search/by-goal` — goal-based search
+- `GET /api/v1/search/suggestions` — autocomplete
+- `GET /api/v1/nodes` — public node directory
+- `GET /api/v1/publishers` — list publishers
+- `GET /api/v1/publishers/:id` — get publisher details
+- `GET /api/v1/publishers/:id/stats` — publisher statistics
+- `GET /api/v1/stats/*` — all statistics endpoints
+- `GET /health` — health check
+- `GET /ready` — readiness probe
+- `GET /api/v1/embedding/status` — embedding service status
+- `POST /api/v1/embedding/similar/:teaserId` — find similar teasers
+- `POST /api/v1/embedding/search` — semantic vector search
+- `GET /api/web/v1/*` — all website API endpoints
+
+## Publisher authentication
+
+Publisher endpoints use the `X-Publisher-Key` header. This key is issued once during [publisher registration](/features/publishers).
+
+### Header format
+
+<ParamField header="X-Publisher-Key" param-type="string" required="true">
+  Publisher API key in the format `rb_pub_{64 hex characters}`.
+</ParamField>
+
+### Example
+
+```bash
+curl -X POST http://localhost:3300/api/v1/teasers \
+  -H "X-Publisher-Key: rb_pub_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content_type": "news",
+    "teaser": { ... }
+  }'
+```
+
+### Endpoints requiring publisher key
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/teasers` | Publish a teaser |
+| `PUT` | `/api/v1/teasers/:teaserId` | Update a teaser |
+| `DELETE` | `/api/v1/teasers/:teaserId` | Remove a teaser |
+| `GET` | `/api/v1/teasers/:teaserId` | Get a teaser |
+| `POST` | `/api/v1/teasers/batch` | Batch operations |
+
+### How it works
+
+1. The client sends the plaintext API key in the `X-Publisher-Key` header
+2. The `PublisherAuthGuard` hashes the key with SHA-256
+3. The hash is matched against the `api_key_hash` column in the `publishers` table
+4. Suspended publishers are automatically rejected (excluded from the lookup)
+5. On success, the publisher's identity is attached to the request for downstream authorization checks
+
+### Error responses
+
+```json
+// Missing header
+{ "statusCode": 401, "message": "Missing X-Publisher-Key header" }
+
+// Invalid key or suspended publisher
+{ "statusCode": 401, "message": "Invalid API key" }
+```
+
+## Admin authentication
+
+Admin endpoints use the `X-Admin-Key` header. The admin key is set via the `ADMIN_API_KEY` environment variable.
+
+### Header format
+
+<ParamField header="X-Admin-Key" param-type="string" required="true">
+  Admin API key matching the `ADMIN_API_KEY` environment variable.
+</ParamField>
+
+### Example
+
+```bash
+curl -X GET http://localhost:3300/api/v1/admin/config \
+  -H "X-Admin-Key: your-secret-admin-key"
+```
+
+### Endpoints requiring admin key
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/admin/config` | Get node configuration |
+| `PUT` | `/api/v1/admin/config` | Update node configuration |
+| `GET` | `/api/v1/admin/cache/stats` | Redis cache statistics |
+| `POST` | `/api/v1/admin/cache/invalidate` | Invalidate cache by pattern |
+| `POST` | `/api/v1/admin/cache/invalidate/search` | Invalidate search cache |
+| `GET` | `/api/v1/admin/elasticsearch/health` | ES cluster health |
+| `POST` | `/api/v1/admin/elasticsearch/refresh` | Refresh all indices |
+| `GET/POST` | `/api/v1/admin/incidents` | Manage incidents |
+| `POST` | `/api/v1/admin/incidents/:id/resolve` | Resolve incident |
+| `PUT` | `/api/v1/publishers/:id` | Update publisher |
+| `POST` | `/api/v1/publishers/:id/rotate-key` | Rotate publisher key |
+| `POST` | `/api/v1/publishers/:id/suspend` | Suspend publisher |
+| `GET` | `/api/v1/nodes/all` | List all nodes (incl. offline) |
+| `POST` | `/api/v1/nodes/register` | Register peer node |
+| `PUT` | `/api/v1/nodes/:nodeId` | Update node |
+| `DELETE` | `/api/v1/nodes/:nodeId` | Remove node |
+| `POST` | `/api/v1/embedding/refresh` | Trigger embedding refresh |
+
+### How it works
+
+1. The client sends the admin key in the `X-Admin-Key` header
+2. The `AdminAuthGuard` hashes both the provided key and the stored `ADMIN_API_KEY` with SHA-256
+3. The hashes are compared using **constant-time comparison** (`timingSafeEqual`) to prevent timing attacks
+4. If `ADMIN_API_KEY` is not configured, all admin endpoints return 401
+
+### Error responses
+
+```json
+// Admin API not configured
+{ "statusCode": 401, "message": "Admin API is not configured on this node" }
+
+// Missing header
+{ "statusCode": 401, "message": "Missing X-Admin-Key header" }
+
+// Invalid key
+{ "statusCode": 401, "message": "Invalid admin key" }
+```
+
+<Callout kind="alert">
+  If `ADMIN_API_KEY` is not set in the environment, **all admin endpoints are disabled** and return 401. This is logged as a warning at startup.
+</Callout>
+
+## Content signing (Ed25519)
+
+In addition to API key authentication, publishers can optionally sign their teasers with Ed25519 digital signatures for content integrity verification.
+
+<Steps>
+  <Step title="Register with a public key">
+    Include your Ed25519 public key (base64-encoded) in the `public_key` field during publisher registration.
+  </Step>
+  <Step title="Sign teasers before publishing">
+    Sign the canonical JSON representation of your teaser with your Ed25519 private key.
+  </Step>
+  <Step title="Include signature in request">
+    Add the base64-encoded signature in the `signature` field of the publish request.
+
+    ```json
+    {
+      "content_type": "news",
+      "teaser": { ... },
+      "signature": "base64-encoded-ed25519-signature"
+    }
+    ```
+  </Step>
+  <Step title="Verification">
+    The Discovery Node verifies the signature against the publisher's registered public key. Invalid signatures are rejected with a 400 error.
+  </Step>
+</Steps>
+
+<Callout kind="info">
+  Content signing is optional. If no signature is provided, the teaser is accepted based on API key authentication alone. However, signed content provides stronger integrity guarantees and may receive higher trust scores in the future.
+</Callout>
+
+## Security best practices
+
+- **Never expose API keys** in client-side code, URLs, or version control
+- **Rotate publisher keys** immediately if a compromise is suspected
+- **Use HTTPS** in production — all keys are transmitted in plaintext headers
+- **Set `CORS_ORIGIN`** to your specific domain(s) in production
+- **Set a strong `ADMIN_API_KEY`** — use at least 32 random characters

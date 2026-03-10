@@ -1,0 +1,147 @@
+---
+title: Faceted Filtering
+description: Aggregation-based filter facets for content discovery UIs.
+---
+
+Facets are aggregation-powered filter options returned alongside search results. They enable filter sidebars in client applications — showing categories, topics, publishers, date ranges, and more with accurate document counts.
+
+## How facets work
+
+When a search request is executed, the Discovery Node automatically includes Elasticsearch aggregations based on the searched content types. The raw aggregation results are transformed into a clean, labeled format suitable for UI rendering.
+
+```mermaid
+graph LR
+    A[Search Request] --> B[Build ES Aggregations]
+    B --> C[Execute Search]
+    C --> D[Transform Aggregations]
+    D --> E[Labeled Facet Response]
+```
+
+## Global facets
+
+These 11 facets are available for all content types:
+
+| Facet | Field | Type | Default | Buckets |
+|-------|-------|------|---------|---------|
+| **Categories** | `classification.categories` | terms | Yes | 20 |
+| **Topics** | `classification.topics` | terms | Yes | 50 |
+| **Publishers** | `publisher.name` | terms | Yes | 20 |
+| **Languages** | `access.languages` | terms | Yes | 30 |
+| **Content Types** | `content_type` | terms | Yes | 20 |
+| **Publication Date** | `temporal.date_published` | date_histogram | Yes | monthly |
+| **Countries** | `geographic.country_codes` | terms | No | 50 |
+| **Access Type** | `access.access_type` | terms | No | 10 |
+| **Free Content** | `access.is_free` | terms | No | 2 |
+| **Publisher Type** | `publisher.type` | terms | No | 10 |
+| **Trust Level** | `publisher.trust_level` | terms | No | 5 |
+
+<Callout kind="info">
+  Facets marked as "Default: Yes" are automatically included in search responses. Non-default facets can be requested via custom aggregation definitions in the search request.
+</Callout>
+
+## Content-type-specific facets
+
+When searching a single content type, additional type-specific facets are added:
+
+<Tabs>
+  <Tab title="News" icon="newspaper">
+    | Facet | Field | Type |
+    |-------|-------|------|
+    | **Article Type** | `classification.article_type` | terms (10 buckets) |
+  </Tab>
+  <Tab title="Events" icon="calendar">
+    | Facet | Field | Type |
+    |-------|-------|------|
+    | **Event Type** | `classification.event_type` | terms (15 buckets) |
+    | **Event Date** | `temporal.event_date` | date_histogram (weekly) |
+    | **Cities** | `geographic.cities` | terms (30 buckets) |
+  </Tab>
+  <Tab title="Jobs" icon="briefcase">
+    | Facet | Field | Type |
+    |-------|-------|------|
+    | **Cities** | `geographic.cities` | terms (30 buckets) |
+  </Tab>
+  <Tab title="Recipes" icon="chef-hat">
+    | Facet | Field | Type |
+    |-------|-------|------|
+    | **Tags** | `classification.tags` | terms (30 buckets) |
+  </Tab>
+</Tabs>
+
+## Facet response format
+
+Facets are returned in the `aggregations` array of every search response:
+
+```json
+{
+  "aggregations": [
+    {
+      "field": "classification.categories",
+      "label": "Categories",
+      "type": "terms",
+      "buckets": [
+        { "key": "politics", "doc_count": 456, "label": "politics" },
+        { "key": "environment", "doc_count": 389, "label": "environment" },
+        { "key": "technology", "doc_count": 234, "label": "technology" }
+      ],
+      "sum_other_doc_count": 155
+    },
+    {
+      "field": "temporal.date_published",
+      "label": "Publication Date",
+      "type": "date_histogram",
+      "buckets": [
+        { "key": "2026-01", "doc_count": 1234 },
+        { "key": "2026-02", "doc_count": 987 }
+      ]
+    },
+    {
+      "field": "geographic.country_codes",
+      "label": "Countries",
+      "type": "terms",
+      "buckets": [
+        { "key": "DE", "doc_count": 3456, "label": "Germany" },
+        { "key": "AT", "doc_count": 1234, "label": "Austria" },
+        { "key": "CH", "doc_count": 890, "label": "Switzerland" }
+      ]
+    }
+  ]
+}
+```
+
+### Facet types
+
+| Type | Description | Example |
+|------|-------------|---------|
+| **terms** | Discrete value buckets with doc counts | Categories, publishers, languages |
+| **date_histogram** | Time-based buckets (day, week, month) | Publication date, event date |
+| **geo_distance** | Distance range buckets from a center point | "Within 10km", "Within 50km" |
+| **range** | Numeric range buckets | Price ranges, word count |
+
+## Custom aggregations
+
+You can override the default facets by providing custom aggregation definitions in the search request:
+
+```json
+{
+  "query": { "text": "restaurants Berlin" },
+  "content_types": ["restaurants"],
+  "aggregations": {
+    "cuisine": {
+      "type": "terms",
+      "field": "classification.cuisine_type",
+      "size": 15
+    },
+    "price_range": {
+      "type": "range",
+      "field": "pricing.average_price"
+    }
+  }
+}
+```
+
+## Country label mapping
+
+Country code facet buckets are automatically mapped to human-readable labels for all EU/EEA countries. For example, `DE` becomes `Germany`, `FR` becomes `France`, `AT` becomes `Austria`.
+
+Boolean facets (`true`/`false` keys) are labeled as `Yes`/`No`.

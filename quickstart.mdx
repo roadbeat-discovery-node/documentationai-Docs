@@ -1,58 +1,126 @@
 ---
-title: Quickstart
-description: Minimal steps to customize this sample starter kit.
+title: Discovery Node Quickstart
+description: Get a roadbeat Discovery Node running locally in under 10 minutes.
 ---
-## Overview
 
-<Callout kind="alert" collapsed="false">
-  This site ships with placeholder content. Use this quickstart to replace it with your real product docs.
+This guide walks you through setting up a Discovery Node on your local machine for development and testing.
+
+## Prerequisites
+
+- **Node.js** >= 20 LTS
+- **pnpm** >= 9
+- **Docker Desktop** (for Elasticsearch, Redis, NATS)
+- **PostgreSQL** 18.x (local or Docker)
+
+<Callout kind="tip">
+  On Windows, install PostgreSQL natively. On macOS/Linux, Docker works well for all services.
 </Callout>
 
-## 1. Update a page
+## Setup
 
 <Steps>
-  <Step title="Edit introduction" icon="edit" title-type="p">
-    Replace the sample introduction with a concise overview of your product and the key actions you want new users to take first.
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/roadbeat/discovery-node.git
+    cd discovery-node
+    ```
   </Step>
 
-  <Step title="Preview your change" icon="monitor" title-type="p">
-    Use your dashboard board editor to confirm the updated introduction looks and reads as expected.
+  <Step title="Install dependencies">
+    ```bash
+    pnpm install
+    ```
+  </Step>
+
+  <Step title="Start infrastructure services">
+    Start Elasticsearch 8.11.4, Redis 7, and NATS 2.10 using Docker Compose:
+    ```bash
+    pnpm docker:dev
+    ```
+    This starts the services defined in `docker/docker-compose.yml`.
+  </Step>
+
+  <Step title="Configure environment">
+    Copy the example environment file and adjust as needed:
+    ```bash
+    cp apps/api/.env.example apps/api/.env
+    ```
+
+    Key variables to set:
+    ```bash
+    DATABASE_URL="postgresql://postgres:password@localhost:5432/roadbeat_discovery_node"
+    ELASTICSEARCH_URL="http://localhost:9200"
+    REDIS_URL="redis://localhost:6379"
+    ADMIN_API_KEY="your-secret-admin-key"
+    ```
+  </Step>
+
+  <Step title="Run database migrations">
+    ```bash
+    pnpm db:migrate
+    pnpm db:generate
+    ```
+  </Step>
+
+  <Step title="Start the API server">
+    ```bash
+    pnpm dev:api
+    ```
+    The API starts on **port 3300**. Swagger docs are available at [http://localhost:3300/api/docs](http://localhost:3300/api/docs).
+  </Step>
+
+  <Step title="Start the website (optional)">
+    In a separate terminal:
+    ```bash
+    pnpm dev:web
+    ```
+    The transparency website starts on **port 3301**.
   </Step>
 </Steps>
 
-## 2. Add a new page
+## Verify it works
 
-<Steps>
-  <Step title="Add a page" icon="file-text" title-type="p">
-    Create a new `page` by clicking on the + button from the left navigation bar of dashboard. If you are using git, create the .mdx file and add to navigation bar using documentation.json
-  </Step>
-</Steps>
+Once the API is running, check the health endpoint:
 
-## Example onboarding flow (replace with yours)
+```bash
+curl http://localhost:3300/health
+```
 
-1. Sign up for an account and verify your email.
+You should see a response like:
 
-2. Create your first workspace, project, or environment.
+```json
+{
+  "status": "healthy",
+  "timestamp": "2026-03-10T10:00:00.000Z",
+  "components": {
+    "postgresql": { "status": "up" },
+    "elasticsearch": { "status": "up", "clusterStatus": "green" },
+    "redis": { "status": "up" },
+    "nats": { "status": "up" }
+  }
+}
+```
 
-3. Add one integration or data source to connect your existing tools.
+## Ports reference
 
-4. Complete a guided action (for example, run your first job or publish your first resource).
-
-5. Invite a teammate and assign a basic role or permission.
-
-## 3. Connect API Reference (optional)
-
-If you have an API, replace `openapi.yaml` with your real OpenAPI file. If you do not need an API reference, remove that tab either from dashboard or  `documentation.json`.
+| Service | Port | URL |
+|---------|------|-----|
+| **Discovery Node API** | 3300 | `http://localhost:3300` |
+| **Swagger Docs** | 3300 | `http://localhost:3300/api/docs` |
+| **Website** | 3301 | `http://localhost:3301` |
+| **Elasticsearch** | 9200 | `http://localhost:9200` |
+| **Redis** | 6379 | — |
+| **NATS** | 4222 | — |
+| **NATS Monitoring** | 8222 | `http://localhost:8222` |
 
 ## Next steps
 
-<Columns cols="2">
-  <Card title="Core Concepts" href="/concepts" icon="layers" horizontal="false">
-    Keep the mental model simple and easy to scan.
+<Columns cols={2}>
+  <Card title="Core Concepts" href="/concepts" icon="layers">
+    Learn about teasers, publishers, and goal-driven search.
   </Card>
 
-  <Card title="Authentication" href="/authentication" icon="lock" horizontal="false">
-    Add your real auth flows and security notes.
+  <Card title="Publish Your First Teaser" href="/help-center/guides/first-teaser" icon="file-plus">
+    Register a publisher and index your first content.
   </Card>
 </Columns>
-

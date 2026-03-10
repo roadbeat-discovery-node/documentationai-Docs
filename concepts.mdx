@@ -1,54 +1,91 @@
 ---
 title: Core Concepts
-description: The basic building blocks of this starter kit.
+description: Key terminology and concepts behind the roadbeat Discovery Node.
 ---
 
-## Overview
+Understanding these core concepts will help you work effectively with the Discovery Node API and architecture.
 
-<Callout kind="alert">
-This page is an example. Replace every concept with the real terms your product uses.
+## Teasers
+
+A **teaser** is the fundamental unit of content in the Discovery Node. It is a lightweight summary of a piece of content — not the full article or listing itself. Teasers contain just enough information for users to decide whether to access the full content at its source.
+
+Every teaser includes:
+
+- **Identifier** — content ID, publisher ID, slug, canonical URL
+- **Overview** — multilingual headline, description, hero image
+- **Classification** — categories, topics, tags, type-specific metadata
+- **Temporal** — publication date, modification date, event dates, expiration
+- **Geographic** — country codes, city names, coordinates for geo search
+- **Publisher** — name, type, verification status, trust level
+- **Access** — free/paid, languages, access type
+
+<Callout kind="info">
+  Teasers are indexed into content-type-specific Elasticsearch indices (e.g. `roadbeat-content-news`, `roadbeat-content-events`). Full content always remains at the publisher's origin.
 </Callout>
 
-## The building blocks
+## Content types
 
-<Columns cols={2}>
-  <Card title="Pages" icon="file-text">
-    Every page is an `.mdx` file. Content lives in the repo and is safe to edit.
-  </Card>
-  <Card title="Navigation" icon="list">
-    Sidebar structure comes from `documentation.json`.
-  </Card>
-  <Card title="Components" icon="layout-grid">
-    Reusable blocks like Callouts, Steps, Tabs, and Cards keep pages consistent.
-  </Card>
-  <Card title="API Reference" icon="code">
-    If you use it, the API tab reads from `openapi.yaml`.
-  </Card>
-</Columns>
+Each teaser belongs to a **content type** that defines its schema and searchable metadata. roadbeat supports dozens of structured content types including:
 
-## Navigation shape (sample)
+| Category | Examples |
+|----------|----------|
+| **News & Media** | News, press releases, blog posts, whitepapers |
+| **Events** | Events, workshops, conferences, meetups |
+| **Employment** | Job offers, internships, freelance gigs |
+| **Commerce** | Real estate, product listings, classifieds |
+| **Food & Dining** | Recipes, restaurants, food reviews |
+| **Education** | Courses, tutorials, learning materials |
 
-```json
-{
-  "tab": "Documentation",
-  "groups": [
-    {
-      "group": "Getting Started",
-      "pages": [
-        { "title": "Introduction", "path": "introduction" }
-      ]
-    }
-  ]
-}
-```
+Content types are defined in the [Schema Registry](/concepts#schema-registry) and each type has its own Elasticsearch index with type-specific facets and analyzers.
 
-## How to adapt this page
+## Publishers
 
-<Steps>
-  <Step title="Replace the terms" icon="edit">
-    Swap "Pages" and "Components" for your real domain language.
-  </Step>
-  <Step title="Add your concepts" icon="plus">
-    Create a section for the ideas your users must learn first.
-  </Step>
-</Steps>
+A **publisher** is any organization or individual that submits teasers to a Discovery Node. Publishers must register and authenticate before they can ingest content.
+
+### Verification levels
+
+| Level | Requirements | Rate limits |
+|-------|-------------|-------------|
+| **Unverified** | Basic registration | 100 teasers/day, 60 req/min |
+| **Domain verified** | DNS TXT record proof | 1,000 teasers/day, 120 req/min |
+| **Organization verified** | Business registration | 10,000 teasers/day, 300 req/min |
+| **Trusted publisher** | Expert committee approval | 100,000 teasers/day, 1,000 req/min |
+
+Publishers authenticate using an API key sent via the `X-Publisher-Key` header. Keys are SHA-256 hashed at rest.
+
+## Goal-driven search
+
+Unlike traditional search engines, Discovery Nodes support **goal-based search**. Users define personal goals (e.g. "Find job offers in Berlin for software engineering") and the system translates these into structured content queries using **filterset templates**.
+
+A filterset template contains:
+- **Content queries** — which content types and filters to apply
+- **Parameter slots** — variables like `{{city}}` or `{{field}}` filled by the user
+- **Relevance weights** — how to score and rank results
+
+The goal search endpoint executes multiple content queries in parallel, deduplicates results, and returns a merged, relevance-ranked feed.
+
+## Facets
+
+**Facets** are aggregation-based filter options returned alongside search results. They enable the filter sidebar in client applications. The Discovery Node provides:
+
+- **11 global facets** — categories, topics, publishers, languages, content types, countries, publication date, access type, free content, publisher type, trust level
+- **Content-type-specific facets** — e.g. article type for news, event type for events, cities for jobs
+
+Facet definitions are configured in code and applied automatically based on the searched content types.
+
+## Node federation
+
+Discovery Nodes are designed to be **federated**. Multiple nodes can specialize in different content types or regions and participate in a shared directory:
+
+- Nodes register with each other via the `/api/v1/nodes` directory
+- Client applications query the directory to find the best node for their needs
+- Heartbeat signals keep the directory up to date
+- Stale nodes (no heartbeat for 5+ minutes) are automatically marked unhealthy
+
+## Schema Registry
+
+The **Schema Registry** is a separate roadbeat service that governs content type definitions. Discovery Nodes use schemas from the registry to validate incoming teasers and configure type-specific search behavior.
+
+## Context Directory
+
+The **Context Directory** is the roadbeat service that manages user goals, interests, and geographic preferences. Client applications use it to build goal-based search queries against Discovery Nodes.

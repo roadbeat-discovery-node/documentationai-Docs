@@ -1,22 +1,61 @@
 ---
-title: Sample Changelog
-description: Sample release notes you can replace with your real updates.
+title: Changelog
+description: Release notes and version history for the roadbeat Discovery Node.
 ---
 
-## Sample updates
+<Update label="2026-03-10" description="v1.0.0" tags={["feature"]}>
+## Initial Release
 
-<Callout kind="alert">
-This changelog is example content. Replace every entry with your real releases.
-</Callout>
+The roadbeat Discovery Node v1.0.0 includes a complete distributed search and content discovery server with the following capabilities:
 
-<Update label="2026-01-26" description="Sample Update" tags={["sample"]}>
-## What changed
-- Cleaned up placeholder copy across the starter kit.
-- Added clearer "sample" messaging to avoid confusion.
-</Update>
+**Search & Discovery**
+- Full-text BM25 search with German and English analyzers
+- Hybrid search (BM25 + kNN vector similarity) via OpenAI embeddings
+- Goal-based search with filterset template parameter substitution
+- Autocomplete suggestions with phrase prefix and fuzzy matching
+- 11 global facets + 4 content-type-specific facet sets
 
-<Update label="2025-12-10" description="Sample Update" tags={["sample"]}>
-## What changed
-- Simplified the Quickstart steps.
-- Trimmed Help Center examples.
+**Content Ingest**
+- Teaser publish, update, delete, and batch operations (up to 100)
+- Ed25519 signature verification for content integrity
+- Automatic embedding generation at ingest time
+- Per-content-type Elasticsearch indices
+
+**Publisher Management**
+- Publisher registration with one-time API key
+- DNS TXT record domain verification
+- 4-tier verification levels with tiered rate limits
+- Admin operations: key rotation, suspension, updates
+
+**Node Federation**
+- Peer node directory with heartbeat protocol
+- Stale node detection (5-minute timeout)
+- Node registration, update, and removal
+
+**Infrastructure**
+- Elasticsearch 8.11.4 with auto-created index templates
+- Redis caching for search results (30s), suggestions (60s), directory (5min)
+- NATS JetStream event streaming for teaser lifecycle events
+- PostgreSQL via Prisma ORM for metadata storage
+
+**Transparency Website**
+- Next.js 14 public dashboard with 24 EU language support
+- Statistics page with Recharts visualizations
+- Real-time health monitoring (10s polling)
+- Content type browser, publisher directory
+- Dynamic legal pages (imprint, privacy, terms)
+
+**Security**
+- Helmet HTTP security headers
+- Global rate limiting (120 req/min/IP)
+- Per-publisher Redis sliding window rate limiter
+- SHA-256 hashed API keys with constant-time comparison
+- Input validation with class-validator (whitelist + forbidNonWhitelisted)
+- Configurable CORS
+
+**DevOps**
+- Multi-stage Docker builds for API and Web
+- Production Docker Compose stack with Caddy reverse proxy
+- GitHub Actions CI pipeline (lint, build, Docker)
+- Environment validation with startup checks
 </Update>

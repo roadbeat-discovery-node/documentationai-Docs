@@ -1,0 +1,196 @@
+---
+title: Self-Hosting
+description: Deploy a production Discovery Node with Docker Compose and Caddy.
+---
+
+This guide covers deploying a Discovery Node to production using the provided Docker Compose stack with Caddy as a reverse proxy for automatic HTTPS.
+
+## Production architecture
+
+The production stack runs 7 services orchestrated by Docker Compose:
+
+```mermaid
+graph TD
+    subgraph Docker Compose
+        A[Caddy<br/>Reverse Proxy + HTTPS]
+        B[API Container<br/>NestJS :3300]
+        C[Web Container<br/>Next.js :3301]
+        D[PostgreSQL 18]
+        E[Elasticsearch 8.11]
+        F[Redis 7]
+        G[NATS 2.10]
+    end
+
+    H[Internet] --> A
+    A -->|/api/*| B
+    A -->|/*| C
+    B --> D
+    B --> E
+    B --> F
+    B --> G
+```
+
+## Deployment steps
+
+<Steps>
+  <Step title="Prepare the server">
+    Requirements:
+    - Linux server (Ubuntu 22.04+ recommended)
+    - Docker Engine 24+ and Docker Compose v2
+    - At least 4 GB RAM, 2 CPU cores
+    - Domain name pointed to your server's IP
+
+    ```bash
+    # Install Docker (if not already installed)
+    curl -fsSL https://get.docker.com | sh
+    ```
+  </Step>
+
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/roadbeat/discovery-node.git
+    cd discovery-node
+    ```
+  </Step>
+
+  <Step title="Configure environment">
+    Create a production `.env` file:
+
+    ```bash
+    cp docker/.env.example docker/.env
+    ```
+
+    Edit `docker/.env` with production values:
+
+    ```bash
+    # Database
+    POSTGRES_PASSWORD=strong-random-password-here
+    DATABASE_URL="postgresql://postgres:strong-random-password-here@postgres:5432/roadbeat_discovery_node"
+
+    # Security
+    ADMIN_API_KEY=strong-random-admin-key-here
+    CORS_ORIGIN=https://discover.yourdomain.com
+    NODE_ENV=production
+
+    # Elasticsearch
+    ELASTICSEARCH_URL=http://elasticsearch:9200
+
+    # Redis
+    REDIS_URL=redis://redis:6379
+
+    # NATS
+    NATS_URL=nats://nats:4222
+
+    # Semantic search (optional)
+    OPENAI_API_KEY=sk-...
+
+    # Domain for Caddy HTTPS
+    DOMAIN=discover.yourdomain.com
+    ```
+  </Step>
+
+  <Step title="Configure Caddy">
+    Edit `docker/Caddyfile` with your domain:
+
+    ```
+    discover.yourdomain.com {
+        handle /api/* {
+            reverse_proxy api:3300
+        }
+        handle {
+            reverse_proxy web:3301
+        }
+    }
+    ```
+
+    Caddy automatically provisions and renews Let's Encrypt TLS certificates.
+  </Step>
+
+  <Step title="Build and start">
+    ```bash
+    docker compose -f docker/docker-compose.prod.yml up -d --build
+    ```
+
+    This builds both the API and Web containers using multi-stage Dockerfiles and starts all 7 services.
+  </Step>
+
+  <Step title="Run database migrations">
+    After the containers are running:
+
+    ```bash
+    docker compose -f docker/docker-compose.prod.yml exec api npx prisma migrate deploy
+    ```
+  </Step>
+
+  <Step title="Verify deployment">
+    ```bash
+    curl https://discover.yourdomain.com/health
+    ```
+
+    All components should report `status: "up"`.
+  </Step>
+</Steps>
+
+## Docker images
+
+| Image | Dockerfile | Description |
+|-------|-----------|-------------|
+| **API** | `docker/api.Dockerfile` | Multi-stage build: install deps → build TypeScript → slim production image |
+| **Web** | `docker/web.Dockerfile` | Multi-stage build: install deps → Next.js build → standalone production image |
+
+Both Dockerfiles include health checks for container orchestration.
+
+## Resource requirements
+
+| Component | Min RAM | Recommended RAM | Disk |
+|-----------|---------|-----------------|------|
+| **API** | 256 MB | 512 MB | 100 MB |
+| **Web** | 128 MB | 256 MB | 100 MB |
+| **Elasticsearch** | 1 GB | 2+ GB | Depends on index size |
+| **PostgreSQL** | 256 MB | 512 MB | 1 GB |
+| **Redis** | 64 MB | 128 MB | — |
+| **NATS** | 32 MB | 64 MB | — |
+| **Total** | ~2 GB | ~4 GB | ~2 GB + index |
+
+<Callout kind="tip">
+  For a Discovery Node with up to 1 million indexed teasers, a server with 4 GB RAM and 2 CPU cores is sufficient. For larger deployments, increase Elasticsearch resources first.
+</Callout>
+
+## Scaling considerations
+
+| Load level | Strategy |
+|-----------|----------|
+| < 1M documents | Single node, default 3 shards |
+| 1M – 10M | Increase ES heap, add replicas |
+| 10M – 100M | Multi-node ES cluster, dedicated data nodes |
+| 100M+ | Dedicated node per content type cluster |
+
+## Monitoring
+
+Key metrics to monitor:
+
+- **API**: Response times, error rates, request throughput
+- **Elasticsearch**: Cluster health, shard balance, query latency, JVM heap
+- **Redis**: Memory usage, hit rate, connection count
+- **PostgreSQL**: Connection pool, query performance
+- **NATS**: Message rates, consumer lag
+
+The `/health` endpoint provides a quick overview of all component statuses. The `/api/v1/stats/dashboard` endpoint provides detailed operational metrics.
+
+## Backup strategy
+
+| Component | Method | Frequency |
+|-----------|--------|-----------|
+| **PostgreSQL** | `pg_dump` or Prisma migrate | Daily |
+| **Elasticsearch** | Snapshot to S3/MinIO | Daily full, hourly incremental |
+| **Redis** | RDB snapshots | Automatic (configured in redis.conf) |
+| **Configuration** | Git (`.env` excluded, document separately) | On change |
+
+## CI/CD
+
+The repository includes a GitHub Actions workflow (`.github/workflows/ci.yml`) that:
+
+1. Lints and builds the API
+2. Lints and builds the Web application
+3. Builds Docker images
+4. Can be extended with deployment steps to your hosting provider

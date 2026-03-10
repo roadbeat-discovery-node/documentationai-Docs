@@ -1,0 +1,198 @@
+---
+title: Semantic Search
+description: AI-powered vector search using embeddings for natural language content discovery.
+---
+
+The Discovery Node supports optional **semantic search** powered by text embeddings. When configured, it generates vector representations of teasers at ingest time and supports hybrid (BM25 + kNN) or pure vector search at query time.
+
+<Callout kind="info">
+  Semantic search requires an `OPENAI_API_KEY` environment variable. If not configured, the embedding service is gracefully disabled and all search operations fall back to keyword-only mode.
+</Callout>
+
+## Architecture decision
+
+Embeddings are generated **by the Discovery Node**, not by Studio Nodes or publishers. This design keeps publishers lightweight and centralizes model management:
+
+| Concern | Publisher-side | Discovery Node-side |
+|---------|---------------|---------------------|
+| **Compute** | Heavy load on publisher devices | Centralized resources |
+| **Model updates** | Push updates to all publishers | Update once, re-embed centrally |
+| **Consistency** | Different model versions possible | Single source of truth |
+| **Lightweight publishers** | Requires bundling AI models | Publishers stay lightweight |
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENAI_API_KEY` | — | OpenAI API key (required to enable) |
+| `OPENAI_API_URL` | `https://api.openai.com/v1/embeddings` | Embeddings API endpoint |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` | OpenAI embedding model |
+| `EMBEDDING_DIMENSIONS` | `1536` | Vector dimensions |
+| `EMBEDDING_VERSION` | `1.0.0` | Version tag for tracking model changes |
+
+## Embedding generation
+
+### At ingest time
+
+When a teaser is published, the `EmbeddingService` combines the following fields into a single text and generates a vector:
+
+1. Headline (English preferred, then German, then any language)
+2. Description (same language priority)
+3. Tags (space-separated)
+4. Topics (space-separated)
+5. Primary category
+
+The resulting embedding is stored in the `_semantic` field of the Elasticsearch document:
+
+```json
+{
+  "_semantic": {
+    "embedding_model": "text-embedding-3-small",
+    "embedding_version": "1.0.0",
+    "embedding_date": "2026-03-10T09:00:05Z",
+    "combined_vector": [0.123, -0.456, 0.789, ...]
+  }
+}
+```
+
+<Callout kind="tip">
+  Embedding generation is non-blocking — if it fails (API error, timeout), the teaser is still indexed without a vector. It can be re-embedded later via the admin refresh endpoint.
+</Callout>
+
+### At query time
+
+Search queries are also converted to embeddings for vector comparison. Query embeddings are cached in Redis for **1 hour** to avoid redundant API calls for repeated searches.
+
+## Search modes
+
+<Tabs>
+  <Tab title="Hybrid search" icon="git-merge">
+    Combines BM25 keyword scoring with kNN vector similarity. The `keyword_weight` parameter controls the balance.
+
+    ```json
+    {
+      "query": { "text": "cozy family-friendly restaurant" },
+      "search_mode": "hybrid",
+      "keyword_weight": 0.7
+    }
+    ```
+
+    - `keyword_weight = 0.7` → 70% BM25, 30% vector (default, favors precision)
+    - `keyword_weight = 0.3` → 30% BM25, 70% vector (favors semantic similarity)
+    - `keyword_weight = 0.5` → equal weight
+  </Tab>
+  <Tab title="Semantic only" icon="brain">
+    Pure vector search using cosine similarity. No keyword matching — results are ranked entirely by embedding distance.
+
+    ```json
+    {
+      "query": { "text": "places to learn about sustainability" },
+      "search_mode": "semantic_only"
+    }
+    ```
+
+    Best for natural language queries where exact keyword matches are unlikely.
+  </Tab>
+</Tabs>
+
+## Similar content ("more like this")
+
+Find teasers with the most similar embeddings to a given teaser:
+
+```bash
+curl -X POST http://localhost:3300/api/v1/embedding/similar/{teaserId}?limit=10
+```
+
+```json
+{
+  "source_teaser_id": "abc-123",
+  "similar_count": 10,
+  "results": [
+    {
+      "_id": "publisher-x:article-789",
+      "_score": 0.95,
+      "identifier": { "slug": "related-article" },
+      "overview": { "headline": { "en": "Related Content Title" } },
+      "publisher": { "name": "Another Publisher" }
+    }
+  ]
+}
+```
+
+The endpoint:
+1. Retrieves the source teaser's vector from Elasticsearch
+2. Executes a kNN search for the nearest neighbors
+3. Filters out the source document itself
+4. Returns results ranked by cosine similarity
+
+## Pure semantic search endpoint
+
+Search using a text query converted directly to an embedding vector:
+
+```bash
+curl -X POST http://localhost:3300/api/v1/embedding/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "best vegetarian restaurants in Munich",
+    "limit": 10,
+    "index": "roadbeat-content-restaurants",
+    "min_score": 0.5
+  }'
+```
+
+```json
+{
+  "query": "best vegetarian restaurants in Munich",
+  "total": 8,
+  "results": [
+    {
+      "_id": "...",
+      "_score": 0.89,
+      "overview": { "headline": { "en": "Top Vegetarian Spots in Munich" } },
+      "publisher": { "name": "Munich Dining Guide" }
+    }
+  ]
+}
+```
+
+## Embedding status
+
+Check the current status of the embedding service:
+
+```bash
+curl http://localhost:3300/api/v1/embedding/status
+```
+
+```json
+{
+  "enabled": true,
+  "model": "text-embedding-3-small",
+  "dimensions": 1536,
+  "version": "1.0.0",
+  "outdated_count": 42,
+  "missing_count": 15
+}
+```
+
+## Admin: embedding refresh
+
+Trigger re-embedding of documents with missing or outdated vectors (requires `X-Admin-Key`):
+
+```bash
+curl -X POST http://localhost:3300/api/v1/embedding/refresh \
+  -H "X-Admin-Key: YOUR_ADMIN_KEY"
+```
+
+This is useful after:
+- Changing the embedding model or version
+- Recovering from an API outage during ingest
+- Upgrading to a higher-quality model
+
+## Endpoints summary
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/v1/embedding/status` | GET | None | Embedding service status |
+| `/api/v1/embedding/refresh` | POST | Admin | Trigger embedding refresh |
+| `/api/v1/embedding/similar/:teaserId` | POST | None | Find similar teasers |
+| `/api/v1/embedding/search` | POST | None | Pure semantic vector search |

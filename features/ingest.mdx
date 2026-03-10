@@ -1,0 +1,192 @@
+---
+title: Content Ingest
+description: Publishing, updating, and removing content teasers via the Discovery Node ingest API.
+---
+
+The ingest pipeline accepts content teasers from authenticated publishers, validates their structure, optionally verifies Ed25519 signatures, generates embeddings, and indexes them into Elasticsearch.
+
+## Authentication
+
+All ingest endpoints require a valid publisher API key in the `X-Publisher-Key` header. Keys are issued during [publisher registration](/features/publishers) and stored as SHA-256 hashes.
+
+```bash
+curl -X POST http://localhost:3300/api/v1/teasers \
+  -H "X-Publisher-Key: rb_pub_a1b2c3d4e5f6..." \
+  -H "Content-Type: application/json" \
+  -d '{ ... }'
+```
+
+<Callout kind="alert">
+  Suspended publishers are automatically rejected. The API key lookup excludes publishers with `verificationStatus = "suspended"`.
+</Callout>
+
+## Publishing a teaser
+
+<Steps>
+  <Step title="Validate structure">
+    The `TeaserValidatorService` checks the teaser document against the expected structure for its content type. Required fields like `identifier`, `overview`, and `classification` must be present.
+  </Step>
+  <Step title="Verify content type access">
+    The publisher must be registered for the teaser's content type. A publisher registered for `["news", "events"]` cannot publish `jobs` teasers.
+  </Step>
+  <Step title="Verify signature (optional)">
+    If the teaser includes an Ed25519 `signature` and the publisher has a registered `public_key`, the signature is verified against the canonical teaser JSON.
+  </Step>
+  <Step title="Verify publisher ownership">
+    The `publisher_id` in the teaser's `identifier` must match the authenticated publisher's ID.
+  </Step>
+  <Step title="Generate embedding (optional)">
+    If the embedding service is configured (`OPENAI_API_KEY`), a vector embedding is generated from the teaser's headline, description, tags, and topics. Embedding failures do not block indexing.
+  </Step>
+  <Step title="Index into Elasticsearch">
+    The document is indexed into `roadbeat-content-{type}` with the composite ID `{publisher_id}:{content_id}`. The index is refreshed with `wait_for` to ensure immediate searchability.
+  </Step>
+  <Step title="Emit event">
+    A `teaser.published` event is emitted via NATS JetStream for downstream consumers.
+  </Step>
+</Steps>
+
+### Request
+
+```bash
+curl -X POST http://localhost:3300/api/v1/teasers \
+  -H "X-Publisher-Key: rb_pub_a1b2c3..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content_type": "news",
+    "teaser": {
+      "identifier": {
+        "content_id": "article-456",
+        "publisher_id": "my-publisher-id",
+        "slug": "renewable-energy-summit-2026",
+        "canonical_url": "https://example.com/news/renewable-energy-summit"
+      },
+      "overview": {
+        "headline": {
+          "en": "Renewable Energy Summit 2026 Draws Record Attendance",
+          "de": "Gipfel für erneuerbare Energien 2026 zieht Rekordteilnehmer an"
+        },
+        "description": {
+          "en": "Over 5,000 delegates gathered in Berlin for the annual summit.",
+          "de": "Über 5.000 Delegierte versammelten sich in Berlin zum jährlichen Gipfel."
+        }
+      },
+      "classification": {
+        "article_type": "news_report",
+        "categories": ["environment", "energy"],
+        "tags": ["renewable", "summit", "berlin"]
+      },
+      "temporal": {
+        "date_published": "2026-03-10T09:00:00Z"
+      },
+      "geographic": {
+        "country_codes": ["DE"],
+        "locations": [{ "name": "Berlin", "type": "city", "coordinates": { "lat": 52.52, "lon": 13.405 } }]
+      },
+      "access": {
+        "is_free": true,
+        "access_type": "free",
+        "languages": ["en", "de"]
+      }
+    },
+    "signature": "base64-encoded-ed25519-signature"
+  }'
+```
+
+### Response
+
+```json
+{
+  "status": "accepted",
+  "teaser_id": "550e8400-e29b-41d4-a716-446655440000",
+  "indexed_at": "2026-03-10T09:00:05.123Z"
+}
+```
+
+## Updating a teaser
+
+Updates replace the entire teaser document. The publisher must own the teaser (matching `publisher.id`). The `teaser_version` counter is automatically incremented.
+
+```bash
+curl -X PUT http://localhost:3300/api/v1/teasers/{teaserId} \
+  -H "X-Publisher-Key: rb_pub_a1b2c3..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content_type": "news",
+    "teaser": { ... }
+  }'
+```
+
+## Removing a teaser
+
+Deletes a teaser from the index. The publisher must own the teaser. A `teaser.unpublished` event is emitted.
+
+```bash
+curl -X DELETE http://localhost:3300/api/v1/teasers/{teaserId} \
+  -H "X-Publisher-Key: rb_pub_a1b2c3..."
+```
+
+```json
+{ "status": "deleted", "teaser_id": "550e8400-..." }
+```
+
+## Retrieving a teaser
+
+Fetch a single teaser by its ID (also requires publisher authentication):
+
+```bash
+curl http://localhost:3300/api/v1/teasers/{teaserId} \
+  -H "X-Publisher-Key: rb_pub_a1b2c3..."
+```
+
+## Batch operations
+
+Execute up to **100 operations** (index, update, delete) in a single request. Each operation is processed sequentially with individual error handling — a failed operation does not block subsequent ones.
+
+```bash
+curl -X POST http://localhost:3300/api/v1/teasers/batch \
+  -H "X-Publisher-Key: rb_pub_a1b2c3..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operations": [
+      { "action": "index", "content_type": "news", "teaser": { ... } },
+      { "action": "update", "content_type": "news", "teaser_id": "abc-123", "teaser": { ... } },
+      { "action": "delete", "content_type": "news", "teaser_id": "def-456" }
+    ]
+  }'
+```
+
+### Batch response
+
+```json
+{
+  "total": 3,
+  "successful": 2,
+  "failed": 1,
+  "results": [
+    { "action": "index", "status": "success", "teaser_id": "new-uuid" },
+    { "action": "update", "status": "success", "teaser_id": "abc-123" },
+    { "action": "delete", "status": "failed", "teaser_id": "def-456", "error": "Teaser def-456 not found" }
+  ]
+}
+```
+
+## Rate limiting
+
+Publishers are subject to rate limits based on their [verification level](/concepts#verification-levels):
+
+| Level | Teasers/day | Requests/min |
+|-------|-------------|--------------|
+| Unverified | 100 | 60 |
+| Domain verified | 1,000 | 120 |
+| Organization verified | 10,000 | 300 |
+| Trusted publisher | 100,000 | 1,000 |
+
+Rate limits are enforced per-publisher using a Redis sliding window. Exceeding the limit returns `429 Too Many Requests`.
+
+## Document ID format
+
+Elasticsearch document IDs follow the pattern `{publisher_id}:{content_id}`. This ensures:
+- Each publisher can only have one document per content ID
+- Re-publishing the same content overwrites the previous version
+- Different publishers can have content with the same content ID without conflicts

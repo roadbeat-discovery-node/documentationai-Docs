@@ -1,0 +1,129 @@
+---
+title: Domain Verification
+description: Prove domain ownership via DNS TXT records to unlock higher rate limits on the Discovery Node.
+---
+
+Domain verification proves that you own the domain associated with your publisher account. Verified publishers receive **10x higher rate limits** (1,000 teasers/day instead of 100) and a "verified" badge visible on the transparency website.
+
+## How it works
+
+The Discovery Node checks for a specific DNS TXT record on your domain. The record contains a verification token that links the domain to your publisher account.
+
+## Verification steps
+
+<Steps>
+  <Step title="Get your verification token">
+    Choose a unique verification token (any alphanumeric string). You will use this during registration or retry verification later.
+
+    Example: `abc123-my-verification-token`
+  </Step>
+
+  <Step title="Add a DNS TXT record">
+    Create a TXT record at `_roadbeat.yourdomain.com` with the value `roadbeat-verify=YOUR_TOKEN`.
+
+    **DNS record details:**
+
+    | Field | Value |
+    |-------|-------|
+    | **Type** | TXT |
+    | **Name/Host** | `_roadbeat` |
+    | **Value** | `roadbeat-verify=abc123-my-verification-token` |
+    | **TTL** | 300 (or your provider's default) |
+
+    <Callout kind="tip">
+      The exact steps to add a TXT record vary by DNS provider. Check your provider's documentation for "adding a TXT record." Common providers: Cloudflare, AWS Route 53, Hetzner DNS, Namecheap, GoDaddy.
+    </Callout>
+  </Step>
+
+  <Step title="Wait for DNS propagation">
+    DNS changes can take up to 48 hours to propagate globally, though most providers update within minutes.
+
+    Verify the record is visible:
+
+    <Tabs>
+      <Tab title="Linux/macOS" icon="terminal">
+        ```bash
+        dig TXT _roadbeat.yourdomain.com
+        ```
+      </Tab>
+      <Tab title="Windows" icon="terminal">
+        ```powershell
+        nslookup -type=TXT _roadbeat.yourdomain.com
+        ```
+      </Tab>
+      <Tab title="Online" icon="globe">
+        Use [Google Admin Toolbox](https://toolbox.googleapps.com/apps/dig/#TXT/_roadbeat.yourdomain.com) or [MXToolbox](https://mxtoolbox.com/SuperTool.aspx) to check TXT records.
+      </Tab>
+    </Tabs>
+
+    Expected output should include:
+    ```
+    _roadbeat.yourdomain.com.  300  IN  TXT  "roadbeat-verify=abc123-my-verification-token"
+    ```
+  </Step>
+
+  <Step title="Register with the token (new publishers)">
+    Include the `verification_token` field in your registration request:
+
+    ```bash
+    curl -X POST http://localhost:3300/api/v1/publishers/register \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "My Publisher",
+        "type": "media",
+        "domain": "yourdomain.com",
+        "public_key": "...",
+        "content_types": ["news"],
+        "contact": { "name": "Tech Team", "email": "tech@yourdomain.com" },
+        "verification_token": "abc123-my-verification-token"
+      }'
+    ```
+
+    If the DNS record is found, your `verificationStatus` will be `domain_verified` immediately.
+  </Step>
+
+  <Step title="Retry verification (existing publishers)">
+    If DNS wasn't ready at registration time, retry verification later:
+
+    ```bash
+    curl -X POST http://localhost:3300/api/v1/publishers/{your-publisher-id}/verify-domain \
+      -H "Content-Type: application/json" \
+      -d '{ "verification_token": "abc123-my-verification-token" }'
+    ```
+
+    Response:
+    ```json
+    { "verified": true }
+    ```
+
+    Your rate limits are automatically upgraded upon successful verification.
+  </Step>
+</Steps>
+
+## Verification levels comparison
+
+| Level | Rate limits | How to achieve |
+|-------|------------|----------------|
+| **Unverified** | 100 teasers/day, 60 req/min | Basic registration |
+| **Domain verified** | 1,000 teasers/day, 120 req/min | DNS TXT record (this guide) |
+| **Organization verified** | 10,000 teasers/day, 300 req/min | Business registration proof (contact node operator) |
+| **Trusted publisher** | 100,000 teasers/day, 1,000 req/min | Expert committee approval |
+
+## Troubleshooting
+
+<ExpandableGroup>
+  <Expandable title="Verification fails even though the DNS record is set">
+    - **DNS propagation delay** — wait a few hours and retry
+    - **Wrong subdomain** — the record must be at `_roadbeat.yourdomain.com`, not `yourdomain.com`
+    - **Token mismatch** — ensure the token in the DNS record exactly matches the one in your API request
+    - **Quotes in TXT record** — some providers add extra quotes. The actual TXT value should be `roadbeat-verify=YOUR_TOKEN` without surrounding quotes
+  </Expandable>
+
+  <Expandable title="Can I use a subdomain?">
+    The domain in your publisher registration should be your main domain (e.g. `yourdomain.com`). The DNS TXT record is checked at `_roadbeat.yourdomain.com`. Using a subdomain as the registered domain (e.g. `news.yourdomain.com`) means the TXT record should be at `_roadbeat.news.yourdomain.com`.
+  </Expandable>
+
+  <Expandable title="Do I need to keep the DNS record permanently?">
+    The DNS record is checked at registration time and during retry verification. Once verified, the status persists. However, keeping the record is recommended as it may be re-checked during audits or trust level reviews.
+  </Expandable>
+</ExpandableGroup>

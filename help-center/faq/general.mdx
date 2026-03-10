@@ -1,0 +1,67 @@
+---
+title: General Questions
+description: Frequently asked questions about the roadbeat Discovery Node.
+---
+
+<ExpandableGroup>
+  <Expandable title="What is a Discovery Node?" default-open="true">
+    A Discovery Node is a distributed search and content discovery server in the roadbeat ecosystem. It indexes structured content teasers from verified publishers and provides faceted search, geographic filtering, goal-driven discovery, and semantic search — all without tracking users or optimizing for engagement.
+
+    Think of it as a specialized, privacy-preserving search engine for structured content.
+  </Expandable>
+
+  <Expandable title="How does a Discovery Node differ from a traditional search engine?">
+    Discovery Nodes differ in several key ways:
+
+    - **Decentralized** — multiple independent nodes, no single point of control
+    - **Content-type aware** — each node specializes in specific content types with type-specific schemas, facets, and analyzers
+    - **Goal-aligned** — filtering is designed around user goals, not engagement metrics
+    - **Privacy-preserving** — no user tracking, no behavioral profiling, no cookies
+    - **Structured data** — content is indexed as typed, schema-validated teasers rather than unstructured web pages
+  </Expandable>
+
+  <Expandable title="What are teasers?">
+    A teaser is a lightweight summary of a piece of content — not the full article or listing itself. It contains a multilingual headline, description, hero image, classification metadata, temporal data, geographic data, publisher info, and access details.
+
+    Teasers are indexed in the Discovery Node for search. The full content always remains at the publisher's origin server. See [Core Concepts](/concepts#teasers) for the full structure.
+  </Expandable>
+
+  <Expandable title="What content types are supported?">
+    roadbeat supports dozens of structured content types organized by category:
+
+    - **News & Media** — news, press releases, blog posts, whitepapers
+    - **Events** — events, workshops, conferences, meetups
+    - **Employment** — job offers, internships, freelance gigs
+    - **Commerce** — real estate, products, services, classifieds
+    - **Food & Dining** — recipes, restaurants, food reviews
+    - **Education** — courses, tutorials, learning materials
+    - And many more
+
+    Each content type has its own JSON Schema definition managed by the [Schema Registry](/concepts#schema-registry).
+  </Expandable>
+
+  <Expandable title="Can I run my own Discovery Node?">
+    Yes. Discovery Nodes are open-source and designed to be self-hosted. You can specialize your node for specific content types or geographic regions. See the [Self-Hosting Guide](/deployment/self-hosting) for deployment instructions.
+  </Expandable>
+
+  <Expandable title="What is goal-driven search?">
+    Goal-driven search allows users to define personal goals (e.g. "Find job offers in Berlin for software engineering") which are translated into structured content queries using filterset templates. The system executes multiple content queries in parallel, deduplicates results, and returns a relevance-ranked feed.
+
+    This is fundamentally different from algorithmic feeds — users explicitly control what they're looking for, and the matching logic is transparent. See [Search & Discovery](/features/search#goal-based-search) for details.
+  </Expandable>
+
+  <Expandable title="What is the relationship between Discovery Nodes and other roadbeat services?">
+    The roadbeat ecosystem includes several services that work together:
+
+    - **Schema Registry** — defines content type schemas used by Discovery Nodes and Studio Nodes
+    - **Studio Node** — the CMS where publishers create content and publish teasers to Discovery Nodes
+    - **Context Directory** — manages user goals, interests, and geographic preferences
+    - **Web Client** — the consumer application that searches Discovery Nodes and displays results
+
+    Discovery Nodes are the search layer — they receive teasers from publishers and serve search results to clients.
+  </Expandable>
+
+  <Expandable title="Is semantic search required?">
+    No. Semantic search is an optional feature that requires an OpenAI API key. Without it, the Discovery Node operates purely on keyword-based BM25 search with full faceted filtering, geographic queries, and all other features. Semantic search adds the ability to find content based on meaning rather than exact keyword matches.
+  </Expandable>
+</ExpandableGroup>

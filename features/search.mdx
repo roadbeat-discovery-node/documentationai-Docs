@@ -1,0 +1,236 @@
+---
+title: Search & Discovery
+description: Full-text search, goal-based search, and autocomplete suggestions in the Discovery Node.
+---
+
+The Discovery Node provides three search endpoints: full-featured content search, goal-based search, and autocomplete suggestions. All search operations use Elasticsearch under the hood with optional semantic vector scoring.
+
+## Content search
+
+The primary search endpoint supports text queries, filters, geographic queries, faceted aggregations, sorting, and pagination.
+
+```bash
+curl -X POST http://localhost:3300/api/v1/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": {
+      "text": "renewable energy Germany",
+      "fields": ["overview.headline.de^3", "overview.description.en^2"]
+    },
+    "content_types": ["news", "events"],
+    "filters": {
+      "classification.categories": ["politics", "environment"],
+      "temporal.date_published": { "gte": "2026-01-01", "lte": "2026-12-31" },
+      "geographic.country_codes": ["DE"],
+      "access.languages": ["de", "en"],
+      "access.is_free": true
+    },
+    "sort": [{ "temporal.date_published": "desc" }],
+    "pagination": { "from": 0, "size": 20 }
+  }'
+```
+
+### Search response
+
+Every search response includes metadata, results, faceted aggregations, and pagination info:
+
+```json
+{
+  "meta": {
+    "request_id": "550e8400-e29b-41d4-a716-446655440000",
+    "took_ms": 45,
+    "total_hits": 1234,
+    "max_score": 12.5
+  },
+  "results": [
+    {
+      "_id": "publisher-abc:article-123",
+      "_score": 12.5,
+      "_source": {
+        "teaser_id": "...",
+        "content_type": "news",
+        "overview": { "headline": { "en": "..." }, "description": { "en": "..." } },
+        "classification": { "categories": ["politics"] },
+        "temporal": { "date_published": "2026-01-24T14:30:00Z" },
+        "publisher": { "name": "Deutsche Nachrichten", "verified": true }
+      },
+      "_highlights": {
+        "overview.headline.en": ["Chancellor Announces New <em>Energy</em> Policy"]
+      }
+    }
+  ],
+  "aggregations": [
+    {
+      "field": "classification.categories",
+      "label": "Categories",
+      "type": "terms",
+      "buckets": [
+        { "key": "politics", "doc_count": 456 },
+        { "key": "environment", "doc_count": 389 }
+      ]
+    }
+  ],
+  "pagination": {
+    "from": 0,
+    "size": 20,
+    "total_pages": 62,
+    "has_next": true
+  }
+}
+```
+
+### Search parameters
+
+<ParamField body="query" param-type="object" required="false">
+  Text search query with optional field boosting. Contains `text` (search string) and `fields` (array of field paths with optional `^N` boost).
+</ParamField>
+
+<ParamField body="content_types" param-type="array" required="false">
+  Content types to search (e.g. `["news", "events"]`). Omit to search all types.
+</ParamField>
+
+<ParamField body="filters" param-type="object" required="false">
+  Filter map where keys are dot-path field names and values are filter values. Supports arrays (OR), ranges (`{ gte, lte }`), and booleans.
+</ParamField>
+
+<ParamField body="geo" param-type="object" required="false">
+  Geographic distance filter with `center` (`{ lat, lon }`) and `distance` (e.g. `"50km"`).
+</ParamField>
+
+<ParamField body="geo_bounding_box" param-type="object" required="false">
+  Bounding box filter with `top_left` and `bottom_right` coordinates.
+</ParamField>
+
+<ParamField body="sort" param-type="array" required="false">
+  Sort order as an array of `{ field: "asc"|"desc" }` objects. Default: relevance then date.
+</ParamField>
+
+<ParamField body="pagination" param-type="object" required="false">
+  Pagination with `from` (offset, default 0) and `size` (page size, default 20, max 100).
+</ParamField>
+
+<ParamField body="aggregations" param-type="object" required="false">
+  Custom aggregation definitions. If omitted, default facets are returned automatically.
+</ParamField>
+
+<ParamField body="search_mode" param-type="string" required="false">
+  Enable semantic search: `"hybrid"` (BM25 + kNN) or `"semantic_only"` (pure vector). Default: keyword only.
+</ParamField>
+
+<ParamField body="keyword_weight" param-type="number" required="false">
+  Weight for BM25 scoring in hybrid mode (0.0–1.0). Vector weight = 1 - keyword_weight. Default: 0.7.
+</ParamField>
+
+### Caching
+
+Search results are cached in Redis for **30 seconds**. Identical queries within the TTL return cached results with a fresh `request_id`. Cache can be manually invalidated via the admin API.
+
+## Goal-based search
+
+The goal search endpoint translates user goals into structured content queries using filterset templates from the Schema Registry.
+
+```bash
+curl -X POST http://localhost:3300/api/v1/search/by-goal \
+  -H "Content-Type: application/json" \
+  -d '{
+    "goal_template_id": "personal/career-job-search",
+    "goal_parameters": {
+      "city": "Berlin",
+      "field": "Software Engineering"
+    },
+    "user_context": {
+      "languages": ["de", "en"],
+      "location": { "lat": 52.52, "lon": 13.405, "city": "Berlin", "country_code": "DE" }
+    },
+    "results_per_query": 10,
+    "max_total_results": 50
+  }'
+```
+
+### How it works
+
+<Steps>
+  <Step title="Load filterset template">
+    The service loads the goal's filterset JSON which defines content queries with parameter slots like `{{city}}`.
+  </Step>
+  <Step title="Substitute parameters">
+    User-provided parameters replace template variables: `{{city}}` becomes `"Berlin"`.
+  </Step>
+  <Step title="Execute queries in parallel">
+    Each content query in the filterset is executed as a separate Elasticsearch search using `Promise.allSettled`.
+  </Step>
+  <Step title="Merge and deduplicate">
+    Results from all queries are merged, deduplicated by teaser ID, sorted by score then publication date, and trimmed to the maximum.
+  </Step>
+</Steps>
+
+## Autocomplete suggestions
+
+The suggestions endpoint provides fast autocomplete for search UIs:
+
+```bash
+curl "http://localhost:3300/api/v1/search/suggestions?q=renewable&content_types=news,events"
+```
+
+```json
+{
+  "suggestions": [
+    {
+      "text": "Renewable Energy Policy Reform",
+      "highlighted": "<em>Renewable</em> Energy Policy Reform",
+      "score": 8.5,
+      "content_type": "news"
+    },
+    {
+      "text": "Renewable Energy Conference 2026",
+      "highlighted": "<em>Renewable</em> Energy Conference 2026",
+      "score": 7.2,
+      "content_type": "events"
+    }
+  ]
+}
+```
+
+- Minimum query length: **2 characters**
+- Returns up to **8 suggestions**
+- Uses `phrase_prefix` + fuzzy matching on headline fields
+- Cached for **60 seconds**
+
+## Search modes
+
+<Tabs>
+  <Tab title="Keyword (default)" icon="type">
+    Standard BM25 full-text search with language-specific analyzers. Best for precise queries with known terms.
+
+    ```json
+    { "query": { "text": "climate policy Berlin" } }
+    ```
+  </Tab>
+  <Tab title="Hybrid" icon="git-merge">
+    Combines BM25 keyword scoring with kNN vector similarity. Requires `OPENAI_API_KEY` to be configured.
+
+    ```json
+    {
+      "query": { "text": "cozy restaurant with vegetarian options" },
+      "search_mode": "hybrid",
+      "keyword_weight": 0.7
+    }
+    ```
+
+    The `keyword_weight` parameter controls the balance: 0.7 means 70% keyword, 30% vector.
+  </Tab>
+  <Tab title="Semantic only" icon="brain">
+    Pure vector similarity search using cosine distance. Best for natural language queries.
+
+    ```json
+    {
+      "query": { "text": "best places to learn about renewable energy" },
+      "search_mode": "semantic_only"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Callout kind="info">
+  Semantic and hybrid search modes require the embedding service to be configured with an `OPENAI_API_KEY`. If not configured, the API gracefully falls back to keyword-only search.
+</Callout>

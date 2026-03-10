@@ -1,0 +1,106 @@
+---
+title: Transparency Website
+description: Public-facing Next.js dashboard showing node statistics, publishers, health, and legal information.
+---
+
+Every Discovery Node includes a public-facing **transparency website** — a Next.js 14 application that provides visibility into the node's operations, indexed content, registered publishers, and health status. This is a core part of roadbeat's commitment to transparency and openness.
+
+## Overview
+
+The website runs on port **3301** and is built with Next.js 14 (App Router), Tailwind CSS, shadcn/ui, Lucide React icons, and Recharts for data visualization. It supports **24 EU languages** via next-intl.
+
+## Pages
+
+<Tabs>
+  <Tab title="Homepage" icon="home">
+    The landing page includes:
+    - **Hero section** with node identity and description
+    - **Metrics bar** showing total documents, publishers, content types, and uptime
+    - **Content type cards** with document counts
+    - **Feature highlights** explaining the node's capabilities
+    - **Node info** with operator details and region
+  </Tab>
+  <Tab title="Statistics" icon="bar-chart-2">
+    Interactive statistics dashboard with:
+    - **Index stats** — document counts per content type, store sizes, index health
+    - **Publisher stats** — counts by type, verification status, trust level
+    - **Performance metrics** — query latency percentiles (p50, p95, p99)
+    - **3 Recharts visualizations** — documents/day, queries/day, latency/day
+  </Tab>
+  <Tab title="Content Types" icon="layers">
+    Lists all indexed content types with:
+    - Document count per type
+    - Index store size
+    - Health indicator (green/yellow/red based on ES index health)
+  </Tab>
+  <Tab title="Publishers" icon="building">
+    Paginated directory of registered publishers showing:
+    - Publisher name, type, and domain
+    - Verification status badge
+    - Trust level indicator
+    - Document count
+    - Filterable by type and status, sortable
+  </Tab>
+  <Tab title="Health" icon="activity">
+    Real-time health dashboard with:
+    - **10-second auto-polling** for live status updates
+    - Component status cards (PostgreSQL, Elasticsearch, Redis, NATS)
+    - Current and recent incidents
+    - Overall system status (healthy / degraded / unhealthy)
+  </Tab>
+  <Tab title="About" icon="info">
+    Node identity and operator information:
+    - Node ID, name, and region
+    - Operator organization name, website, and contact
+    - Network description and purpose
+    - Launch date
+  </Tab>
+  <Tab title="Legal" icon="scale">
+    Dynamic legal pages loaded from the node configuration:
+    - **Imprint** — operator identification (required in EU)
+    - **Privacy Policy** — data handling practices
+    - **Terms of Service** — usage conditions
+    
+    Content is stored as multilingual HTML in the `node_config` database table and served via the admin API.
+  </Tab>
+</Tabs>
+
+## Website API
+
+The website communicates with the Discovery Node API via dedicated read-only endpoints at `/api/web/v1`. These are separate from the main API to allow independent rate limiting and caching.
+
+| Endpoint | Description | Cache |
+|----------|-------------|-------|
+| `GET /api/web/v1/node-info` | Node identity and operator info | 5 min |
+| `GET /api/web/v1/metrics` | Homepage metrics bar data | 1 min |
+| `GET /api/web/v1/content-types` | Content types with document counts | 2 min |
+| `GET /api/web/v1/publishers` | Publishers list (paginated, filterable) | 1 min |
+| `GET /api/web/v1/health` | Component health status | No cache |
+| `GET /api/web/v1/incidents` | Recent incidents | 30 sec |
+| `GET /api/web/v1/legal/:page` | Legal page content (imprint/privacy/terms) | 1 hour |
+
+<Callout kind="info">
+  Website API endpoints are rate-limited to 120 requests/minute per IP, separate from the main API throttle.
+</Callout>
+
+## Internationalization
+
+The website supports all **24 official EU languages**:
+
+bg, cs, da, de, el, en, es, et, fi, fr, ga, hr, hu, it, lt, lv, mt, nl, pl, pt, ro, sk, sl, sv
+
+Locale routing uses the `[locale]` App Router segment with `next-intl` v4. The locale prefix is used only when needed (English is the default). A language switcher in the header allows visitors to change languages.
+
+All UI strings (~120 keys) are stored in JSON message files under `apps/web/src/messages/`.
+
+## SEO
+
+The website includes:
+- **`sitemap.ts`** — dynamic sitemap generation for all pages and locales
+- **`robots.ts`** — search engine crawling rules
+- **Per-page Metadata** — title, description, and Open Graph tags for social sharing
+- **Locale-aware canonical URLs** for all pages
+
+## Production deployment
+
+In production, the website is served behind **Caddy** as a reverse proxy with automatic HTTPS. The Docker production stack (`docker/docker-compose.prod.yml`) includes a dedicated web container built from `docker/web.Dockerfile` (multi-stage build).

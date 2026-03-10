@@ -1,0 +1,195 @@
+---
+title: Publishing Your First Teaser
+description: End-to-end guide from publisher registration to your first indexed teaser on a Discovery Node.
+---
+
+This guide walks you through the complete flow of registering as a publisher and publishing your first content teaser to a Discovery Node.
+
+## Prerequisites
+
+- A running Discovery Node (see [Quickstart](/quickstart))
+- `curl` or any HTTP client
+- Your organization's domain name
+- An Ed25519 key pair (optional, for content signing)
+
+## Step-by-step
+
+<Steps>
+  <Step title="Register as a publisher">
+    Send a registration request with your organization details:
+
+    ```bash
+    curl -X POST http://localhost:3300/api/v1/publishers/register \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "My News Outlet",
+        "type": "media",
+        "domain": "mynews.example.com",
+        "public_key": "MCowBQYDK2VwAyEAexamplekey...",
+        "content_types": ["news"],
+        "contact": {
+          "name": "Tech Team",
+          "email": "tech@mynews.example.com"
+        }
+      }'
+    ```
+
+    The response contains your publisher ID and a **one-time API key**:
+
+    ```json
+    {
+      "publisher": {
+        "id": "abc-123-def-456",
+        "name": "My News Outlet",
+        "verificationStatus": "unverified",
+        "rateLimits": { "teasers_per_day": 100, "requests_per_minute": 60 }
+      },
+      "api_key": "rb_pub_a1b2c3d4e5f6..."
+    }
+    ```
+
+    <Callout kind="alert">
+      Save the `api_key` immediately — it is shown only once and cannot be retrieved later.
+    </Callout>
+  </Step>
+
+  <Step title="Publish a teaser">
+    Use your API key to publish a news teaser:
+
+    ```bash
+    curl -X POST http://localhost:3300/api/v1/teasers \
+      -H "X-Publisher-Key: rb_pub_a1b2c3d4e5f6..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "content_type": "news",
+        "teaser": {
+          "identifier": {
+            "content_id": "my-first-article",
+            "publisher_id": "abc-123-def-456",
+            "slug": "hello-world-from-discovery-node",
+            "canonical_url": "https://mynews.example.com/hello-world"
+          },
+          "overview": {
+            "headline": {
+              "en": "Hello World: My First Teaser on roadbeat",
+              "de": "Hallo Welt: Mein erster Teaser auf roadbeat"
+            },
+            "description": {
+              "en": "Testing the Discovery Node ingest pipeline with a sample news teaser.",
+              "de": "Test der Discovery Node Ingest-Pipeline mit einem Beispiel-News-Teaser."
+            }
+          },
+          "classification": {
+            "article_type": "news_report",
+            "categories": ["technology"],
+            "tags": ["roadbeat", "test", "hello-world"]
+          },
+          "temporal": {
+            "date_published": "2026-03-10T10:00:00Z"
+          },
+          "geographic": {
+            "country_codes": ["DE"]
+          },
+          "access": {
+            "is_free": true,
+            "access_type": "free",
+            "languages": ["en", "de"]
+          }
+        }
+      }'
+    ```
+
+    Expected response:
+
+    ```json
+    {
+      "status": "accepted",
+      "teaser_id": "550e8400-e29b-41d4-a716-446655440000",
+      "indexed_at": "2026-03-10T10:00:01.234Z"
+    }
+    ```
+  </Step>
+
+  <Step title="Search for your teaser">
+    Verify the teaser is searchable:
+
+    ```bash
+    curl -X POST http://localhost:3300/api/v1/search \
+      -H "Content-Type: application/json" \
+      -d '{
+        "query": { "text": "hello world roadbeat" },
+        "content_types": ["news"]
+      }'
+    ```
+
+    Your teaser should appear in the `results` array with highlighted matches.
+  </Step>
+
+  <Step title="Update the teaser (optional)">
+    Modify the teaser by sending an update:
+
+    ```bash
+    curl -X PUT http://localhost:3300/api/v1/teasers/{teaserId} \
+      -H "X-Publisher-Key: rb_pub_a1b2c3d4e5f6..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "content_type": "news",
+        "teaser": {
+          "identifier": {
+            "content_id": "my-first-article",
+            "publisher_id": "abc-123-def-456",
+            "slug": "hello-world-from-discovery-node",
+            "canonical_url": "https://mynews.example.com/hello-world"
+          },
+          "overview": {
+            "headline": {
+              "en": "Hello World: Updated Teaser Title",
+              "de": "Hallo Welt: Aktualisierter Teaser-Titel"
+            },
+            "description": {
+              "en": "This teaser has been updated to demonstrate the update flow.",
+              "de": "Dieser Teaser wurde aktualisiert, um den Update-Ablauf zu demonstrieren."
+            }
+          },
+          "classification": {
+            "article_type": "news_report",
+            "categories": ["technology"],
+            "tags": ["roadbeat", "test", "updated"]
+          },
+          "temporal": {
+            "date_published": "2026-03-10T10:00:00Z",
+            "date_modified": "2026-03-10T11:00:00Z"
+          },
+          "access": {
+            "is_free": true,
+            "access_type": "free",
+            "languages": ["en", "de"]
+          }
+        }
+      }'
+    ```
+
+    The `teaser_version` is automatically incremented.
+  </Step>
+
+  <Step title="Clean up (optional)">
+    Remove the test teaser:
+
+    ```bash
+    curl -X DELETE http://localhost:3300/api/v1/teasers/{teaserId} \
+      -H "X-Publisher-Key: rb_pub_a1b2c3d4e5f6..."
+    ```
+  </Step>
+</Steps>
+
+## Next steps
+
+<Columns cols={2}>
+  <Card title="Domain Verification" icon="shield-check" href="/help-center/guides/domain-verification">
+    Verify your domain to increase your rate limits from 100 to 1,000 teasers/day.
+  </Card>
+
+  <Card title="Batch Operations" icon="layers" href="/features/ingest#batch-operations">
+    Publish up to 100 teasers in a single API call.
+  </Card>
+</Columns>

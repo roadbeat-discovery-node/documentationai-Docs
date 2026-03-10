@@ -1,0 +1,166 @@
+---
+title: Common Issues
+description: Solutions for frequent errors and problems when working with the Discovery Node.
+---
+
+## Connection errors
+
+<ExpandableGroup>
+  <Expandable title="Elasticsearch unreachable at startup" default-open="true">
+    **Symptom**: The API logs `Elasticsearch not available` and search endpoints return errors.
+
+    **Causes and fixes**:
+
+    1. **Docker not running** — ensure Elasticsearch is started: `pnpm docker:dev`
+    2. **Wrong URL** — check `ELASTICSEARCH_URL` in your `.env` file (default: `http://localhost:9200`)
+    3. **ES still starting** — Elasticsearch 8.x can take 30–60 seconds to become ready. Wait and restart the API.
+    4. **Port conflict** — verify port 9200 is not used by another service: `lsof -i :9200` (macOS/Linux) or `netstat -ano | findstr 9200` (Windows)
+
+    Verify connectivity:
+    ```bash
+    curl http://localhost:9200
+    ```
+  </Expandable>
+
+  <Expandable title="Redis connection refused">
+    **Symptom**: Cache operations fail silently; search results are never cached.
+
+    **Fix**: Ensure Redis is running (`pnpm docker:dev`) and `REDIS_URL` is correct (default: `redis://localhost:6379`).
+
+    ```bash
+    redis-cli ping
+    # Expected: PONG
+    ```
+  </Expandable>
+
+  <Expandable title="Database connection error (PostgreSQL)">
+    **Symptom**: API fails to start with `DATABASE_URL is required` or connection errors.
+
+    **Fix**:
+    1. Ensure PostgreSQL is running and the database exists
+    2. Verify `DATABASE_URL` in `.env` matches your setup
+    3. Run migrations: `pnpm db:migrate`
+
+    ```bash
+    psql -U postgres -c "SELECT 1"
+    ```
+  </Expandable>
+
+  <Expandable title="NATS connection failed">
+    **Symptom**: Events are not emitted; the health endpoint shows NATS as down.
+
+    **Fix**: NATS is optional for basic operation. If you need event streaming, ensure NATS is running via Docker:
+    ```bash
+    pnpm docker:dev
+    ```
+    The NATS monitoring dashboard is available at `http://localhost:8222`.
+  </Expandable>
+</ExpandableGroup>
+
+## Authentication errors
+
+<ExpandableGroup>
+  <Expandable title="401 — Missing X-Publisher-Key header">
+    All teaser ingest endpoints require the `X-Publisher-Key` header. Ensure you're including your API key:
+
+    ```bash
+    curl -X POST http://localhost:3300/api/v1/teasers \
+      -H "X-Publisher-Key: rb_pub_your_key_here" \
+      -H "Content-Type: application/json" \
+      -d '{ ... }'
+    ```
+  </Expandable>
+
+  <Expandable title="401 — Invalid API key">
+    **Possible causes**:
+    - The API key is incorrect or has been rotated
+    - The publisher account has been suspended
+    - The key was copied incorrectly (check for trailing whitespace)
+
+    If you've lost your key, an admin must rotate it via `POST /api/v1/publishers/:id/rotate-key`.
+  </Expandable>
+
+  <Expandable title="401 — Admin API is not configured on this node">
+    The `ADMIN_API_KEY` environment variable is not set. Admin endpoints are disabled until it is configured.
+
+    Add to your `.env`:
+    ```bash
+    ADMIN_API_KEY=your-strong-random-key
+    ```
+    Restart the API after changing environment variables.
+  </Expandable>
+</ExpandableGroup>
+
+## Publishing errors
+
+<ExpandableGroup>
+  <Expandable title="400 — Teaser validation failed">
+    The teaser document is missing required fields or has an invalid structure. The error response includes specific validation errors:
+
+    ```json
+    {
+      "statusCode": 400,
+      "message": "Teaser validation failed",
+      "errors": ["identifier.content_id is required", "overview.headline is required"]
+    }
+    ```
+
+    Ensure your teaser includes at minimum: `identifier` (with `content_id` and `publisher_id`), `overview` (with `headline`), and `classification`.
+  </Expandable>
+
+  <Expandable title="403 — Publisher is not registered for content type">
+    You're trying to publish a teaser for a content type not in your registration. For example, if you registered for `["news"]` but try to publish an `events` teaser.
+
+    Contact an admin to update your allowed content types via `PUT /api/v1/publishers/:id`.
+  </Expandable>
+
+  <Expandable title="403 — publisher_id in teaser does not match authenticated publisher">
+    The `identifier.publisher_id` in your teaser must match your authenticated publisher ID. This prevents publishers from impersonating each other.
+  </Expandable>
+
+  <Expandable title="429 — Too Many Requests">
+    You've exceeded your rate limit. Check your [verification level](/concepts#verification-levels) for your current limits. Options:
+    - Wait and retry with exponential backoff
+    - [Verify your domain](/help-center/guides/domain-verification) for higher limits
+    - Use batch operations to reduce request count
+  </Expandable>
+
+  <Expandable title="400 — Invalid teaser signature">
+    The Ed25519 signature doesn't match the teaser content. Ensure:
+    - You're signing the exact canonical JSON of the teaser
+    - The public key registered with the Discovery Node matches the private key used for signing
+    - The signature is properly base64-encoded
+  </Expandable>
+</ExpandableGroup>
+
+## Search issues
+
+<ExpandableGroup>
+  <Expandable title="Search returns empty results">
+    **Possible causes**:
+    1. **No content indexed** — publish some teasers first
+    2. **Wrong content type filter** — check the `content_types` array in your request
+    3. **Filters too restrictive** — try removing filters one by one to identify the culprit
+    4. **Index not created** — the index `roadbeat-content-{type}` is created on first document. Check ES: `curl http://localhost:9200/_cat/indices?v`
+  </Expandable>
+
+  <Expandable title="Semantic search returns 'Embedding service not configured'">
+    The `OPENAI_API_KEY` environment variable is not set. Semantic search features (`search_mode: "hybrid"` or `"semantic_only"`) require this key. Without it, only keyword search is available.
+  </Expandable>
+
+  <Expandable title="Suggestions return empty even with indexed content">
+    Suggestions require at least 2 characters in the query parameter `q`. They search headline fields specifically — ensure your teasers have populated `overview.headline` fields.
+  </Expandable>
+</ExpandableGroup>
+
+## Health check shows degraded status
+
+The `/health` endpoint reports `degraded` when one or more non-critical components are down while critical ones (PostgreSQL, Elasticsearch) are functioning. Check the `components` object in the health response to identify which service is down:
+
+```bash
+curl http://localhost:3300/health | jq '.components'
+```
+
+Common causes:
+- **Redis down** → caching disabled, search still works but slower
+- **NATS down** → events not emitted, core functionality unaffected
