@@ -3,6 +3,27 @@ title: Changelog
 description: Release notes and version history for the roadbeat Discovery Node.
 ---
 
+<Update label="2026-03-14" description="v1.1.0" tags={["feature"]}>
+## Batched goal search & random mode
+
+**New endpoint: `POST /api/v1/search/by-goals`**
+- Accepts an array of pre-resolved `content_queries` from one or many user goals and builds a **single Elasticsearch `bool.should` query** — enabling 150+ content_queries to execute in one ES request instead of 150 separate ones
+- Each content_query becomes a `should` clause with content_type filter, classification filters, and relevance-based boost weighting (high=1.5, medium=1.0, low=0.5)
+- Supports **named queries** for goal attribution — each clause carries `_name: "goal:{goalId}:cq:{index}"` so ES returns `matched_queries` identifying which goals matched each result
+- Global user filters (date range, language, publisher, geographic) applied at the top-level `filter` clause across all goal queries
+- Uses wildcard index `roadbeat-content-*` to avoid `index_not_found_exception` when some content types have no indexed content yet
+
+**Random / Surprise mode**
+- New `random` flag on the batch endpoint triggers `function_score` with `random_score` for serendipitous content discovery
+- Session-stable pagination via `random_seed` — same seed produces same ordering within a session
+- Optional light bias from user's goal categories (low boost 0.3) so random results lean slightly toward the user's interests
+
+**Goal catalog filter mapping**
+- `mapGoalCatalogFilters()` translates goal catalog filter paths to Elasticsearch classification paths: `category.tags` → `classification.tags`, `category.categories` → `classification.categories`, `category.primary` → `classification.primary_category`, `category.topics` → `classification.topics`
+- DN-native paths (`classification.*`, `temporal.*`, `access.*`, `publisher.*`, `geographic.*`, `metadata.*`) passed through directly
+- Unknown content-type-specific keys (e.g. `event_type`, `mood`, `industry`) are silently ignored since the teaser generator does not populate them in the index
+</Update>
+
 <Update label="2026-03-10" description="v1.0.0" tags={["feature"]}>
 ## Initial Release
 
