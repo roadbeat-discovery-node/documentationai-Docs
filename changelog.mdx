@@ -7,9 +7,9 @@ description: Release notes and version history for the roadbeat Discovery Node.
 
   **Query builder**
 
-  - **`coerceBooleanValue()`** — new helper in `QueryBuilderService` that converts string representations of booleans (`"1"`, `"0"`, `"true"`, `"false"`) to actual ES boolean values (`true`, `false`) before building `terms` or `term` queries on `type_filters.*` fields
+  - **`coerceBooleanValue()`** — new helper in `QueryBuilderService` that converts string representations of booleans (`"1"`, `"0"`, `"true"`, `"false"`) to actual ES boolean values (`true`, `false`) before building `terms` or `term` queries on `type_filters.` fields
 
-  - **`applyTypeFilters()`**updated** — all `type_filters` filter values are now passed through `coerceBooleanValue()`, ensuring that frontend filter values (which use `"1"`/`"0"` strings) correctly match ES documents where boolean fields are stored as native boolean type
+  - `applyTypeFilters() `**updated** — all `type_filters` filter values are now passed through `coerceBooleanValue()`, ensuring that frontend filter values (which use `"1"`/`"0"` strings) correctly match ES documents where boolean fields are stored as native boolean type
 
   - **Backwards compatible** — non-boolean string values (e.g., `"analysis"`, `"free"`) pass through unchanged
 </Update>
@@ -21,21 +21,21 @@ description: Release notes and version history for the roadbeat Discovery Node.
 
   - **`DynamicFacetService`** — new service that reads `x-filter` annotations from content type metadata schemas (fetched from Schema Registry, cached 10 min) and dynamically builds `FacetDefinition[]` for any content type — zero hard-coded per-type configuration
 
-  - **`type_filters `**ES sub-object** — new `dynamic: true` sub-object in the ES index template with `dynamic_templates` mapping strings as `keyword` and date-suffixed fields as `date` — allows arbitrary filter fields without template changes
+  - `type_filters `**ES sub-object** — new `dynamic: true` sub-object in the ES index template with `dynamic_templates` mapping strings as `keyword` and date-suffixed fields as `date` — allows arbitrary filter fields without template changes
 
-  - **Deleted****`CONTENT_TYPE_FACETS`** — removed the hard-coded per-type facet map from `facet-config.ts`, replaced entirely by schema-driven definitions
+  - **Deleted** `CONTENT_TYPE_FACETS` — removed the hard-coded per-type facet map from `facet-config.ts`, replaced entirely by schema-driven definitions
 
   **Enhanced facet metadata**
 
-  - **`FacetDefinition`**interface** expanded with `labels` (multilingual), `ui_hint` (widget type), `unit` (range label), `priority` (display order), `content_type_specific` (boolean flag)
+  - `FacetDefinition `**interface** expanded with `labels` (multilingual), `ui_hint` (widget type), `unit` (range label), `priority` (display order), `content_type_specific` (boolean flag)
 
-  - **`FacetDto`**response** now includes `content_type_specific`, `ui_hint`, `unit`, `labels`, `priority` fields for type-specific facets
+  - `FacetDto `**response** now includes `content_type_specific`, `ui_hint`, `unit`, `labels`, `priority` fields for type-specific facets
 
   - **UI hint auto-inference** — when not explicitly set in the schema, `ui_hint` is inferred from enum count: ≤6 → `chips`, 7-15 → `checkboxes`, >15 → `searchable_checkboxes`
 
   **Query builder**
 
-  - **`applyTypeFilters()`** — new filter method handling `type_filters.*` keys with support for terms (string/array), boolean, and range (`min`/`max` or `gte`/`lte`) filters
+  - **`applyTypeFilters()`** — new filter method handling `type_filters` keys with support for terms (string/array), boolean, and range (`min`/`max` or `gte`/`lte`) filters
 
   - **type\_filters pass-through** added to `mapGoalCatalogFilters()`, `buildGoalBatchQuery()`, and `buildRandomQuery()` global filter paths
 
@@ -49,9 +49,9 @@ description: Release notes and version history for the roadbeat Discovery Node.
 <Update label="2026-03-14" description="v1.1.0" tags={["feature"]}>
   ## Batched goal search & random mode
 
-  **New endpoint:** `POST /api/v1/search/by-goals`**
+  **New endpoint:** `POST /api/v1/search/by-goals`\*\*
 
-  - Accepts an array of pre-resolved `content_queries` from one or many user goals and builds a **single Elasticsearch **`bool.should` **query** — enabling 150+ content\_queries to execute in one ES request instead of 150 separate ones
+  - Accepts an array of pre-resolved `content_queries` from one or many user goals and builds a single Elasticsearch `bool.should` **query** — enabling 150+ content\_queries to execute in one ES request instead of 150 separate ones
 
   - Each content\_query becomes a `should` clause with content\_type filter, classification filters, and relevance-based boost weighting (high=1.5, medium=1.0, low=0.5)
 
