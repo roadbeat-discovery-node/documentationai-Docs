@@ -3,6 +3,15 @@ title: Changelog
 description: Release notes and version history for the roadbeat Discovery Node.
 ---
 
+<Update label="2026-03-16" description="v1.2.1" tags={["bugfix"]}>
+## Boolean filter coercion fix
+
+**Query builder**
+- **`coerceBooleanValue()`** — new helper in `QueryBuilderService` that converts string representations of booleans (`"1"`, `"0"`, `"true"`, `"false"`) to actual ES boolean values (`true`, `false`) before building `terms` or `term` queries on `type_filters.*` fields
+- **`applyTypeFilters()` updated** — all `type_filters` filter values are now passed through `coerceBooleanValue()`, ensuring that frontend filter values (which use `"1"`/`"0"` strings) correctly match ES documents where boolean fields are stored as native boolean type
+- **Backwards compatible** — non-boolean string values (e.g., `"analysis"`, `"free"`) pass through unchanged
+</Update>
+
 <Update label="2026-03-16" description="v1.2.0" tags={["feature"]}>
 ## Schema-driven content-type-specific filters
 

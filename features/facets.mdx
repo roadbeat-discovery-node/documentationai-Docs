@@ -162,3 +162,22 @@ You can override the default facets by providing custom aggregation definitions 
 Country code facet buckets are automatically mapped to human-readable labels for all EU/EEA countries. For example, `DE` becomes `Germany`, `FR` becomes `France`, `AT` becomes `Austria`.
 
 Boolean facets (`true`/`false` keys) are labeled as `Yes`/`No`.
+
+## Boolean filter handling
+
+Boolean fields in `type_filters` (e.g., `is_breaking`, `is_exclusive`, `is_free`) are stored as native ES boolean values (`true`/`false`). However, frontends typically send filter values as strings (`"1"`, `"0"`).
+
+The Discovery Node's query builder automatically coerces these string values to proper booleans before building Elasticsearch queries:
+
+| Frontend value | ES query value |
+|---------------|---------------|
+| `"1"` | `true` |
+| `"true"` | `true` |
+| `"0"` | `false` |
+| `"false"` | `false` |
+
+This coercion is applied transparently in `applyTypeFilters()` — frontends do not need to handle this conversion.
+
+<Callout kind="info">
+  Non-boolean string values (e.g., `"analysis"`, `"free"`) pass through the coercion unchanged and are matched as keywords.
+</Callout>
