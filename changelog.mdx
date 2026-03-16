@@ -2,112 +2,171 @@
 title: Changelog
 description: Release notes and version history for the roadbeat Discovery Node.
 ---
-
 <Update label="2026-03-16" description="v1.2.1" tags={["bugfix"]}>
-## Boolean filter coercion fix
+  ## Boolean filter coercion fix
 
-**Query builder**
-- **`coerceBooleanValue()`** — new helper in `QueryBuilderService` that converts string representations of booleans (`"1"`, `"0"`, `"true"`, `"false"`) to actual ES boolean values (`true`, `false`) before building `terms` or `term` queries on `type_filters.*` fields
-- **`applyTypeFilters()` updated** — all `type_filters` filter values are now passed through `coerceBooleanValue()`, ensuring that frontend filter values (which use `"1"`/`"0"` strings) correctly match ES documents where boolean fields are stored as native boolean type
-- **Backwards compatible** — non-boolean string values (e.g., `"analysis"`, `"free"`) pass through unchanged
+  **Query builder**
+
+  - **`coerceBooleanValue()`** — new helper in `QueryBuilderService` that converts string representations of booleans (`"1"`, `"0"`, `"true"`, `"false"`) to actual ES boolean values (`true`, `false`) before building `terms` or `term` queries on `type_filters.*` fields
+
+  - **`applyTypeFilters()`****&#x20;updated** — all `type_filters` filter values are now passed through `coerceBooleanValue()`, ensuring that frontend filter values (which use `"1"`/`"0"` strings) correctly match ES documents where boolean fields are stored as native boolean type
+
+  - **Backwards compatible** — non-boolean string values (e.g., `"analysis"`, `"free"`) pass through unchanged&#x20;
 </Update>
 
 <Update label="2026-03-16" description="v1.2.0" tags={["feature"]}>
-## Schema-driven content-type-specific filters
+  ## Schema-driven content-type-specific filters
 
-**Dynamic facet engine**
-- **`DynamicFacetService`** — new service that reads `x-filter` annotations from content type metadata schemas (fetched from Schema Registry, cached 10 min) and dynamically builds `FacetDefinition[]` for any content type — zero hard-coded per-type configuration
-- **`type_filters` ES sub-object** — new `dynamic: true` sub-object in the ES index template with `dynamic_templates` mapping strings as `keyword` and date-suffixed fields as `date` — allows arbitrary filter fields without template changes
-- **Deleted `CONTENT_TYPE_FACETS`** — removed the hard-coded per-type facet map from `facet-config.ts`, replaced entirely by schema-driven definitions
+  **Dynamic facet engine**
 
-**Enhanced facet metadata**
-- **`FacetDefinition` interface** expanded with `labels` (multilingual), `ui_hint` (widget type), `unit` (range label), `priority` (display order), `content_type_specific` (boolean flag)
-- **`FacetDto` response** now includes `content_type_specific`, `ui_hint`, `unit`, `labels`, `priority` fields for type-specific facets
-- **UI hint auto-inference** — when not explicitly set in the schema, `ui_hint` is inferred from enum count: ≤6 → `chips`, 7-15 → `checkboxes`, >15 → `searchable_checkboxes`
+  - **`DynamicFacetService`** — new service that reads `x-filter` annotations from content type metadata schemas (fetched from Schema Registry, cached 10 min) and dynamically builds `FacetDefinition[]` for any content type — zero hard-coded per-type configuration
 
-**Query builder**
-- **`applyTypeFilters()`** — new filter method handling `type_filters.*` keys with support for terms (string/array), boolean, and range (`min`/`max` or `gte`/`lte`) filters
-- **`type_filters.*` pass-through** added to `mapGoalCatalogFilters()`, `buildGoalBatchQuery()`, and `buildRandomQuery()` global filter paths
+  - **`type_filters`****&#x20;ES sub-object** — new `dynamic: true` sub-object in the ES index template with `dynamic_templates` mapping strings as `keyword` and date-suffixed fields as `date` — allows arbitrary filter fields without template changes
 
-**Aggregation pipeline**
-- **`buildAggsFromFacetDefs()`** — new method in `SearchService` that builds ES aggregation clauses from `FacetDefinition[]` (terms, date_histogram, stats for ranges)
-- Both `search()` and `searchByGoalBatch()` now use facet-definition-driven aggregations instead of hard-coded defaults
+  - **Deleted&#x20;****`CONTENT_TYPE_FACETS`** — removed the hard-coded per-type facet map from `facet-config.ts`, replaced entirely by schema-driven definitions
+
+  **Enhanced facet metadata**
+
+  - **`FacetDefinition`****&#x20;interface** expanded with `labels` (multilingual), `ui_hint` (widget type), `unit` (range label), `priority` (display order), `content_type_specific` (boolean flag)
+
+  - **`FacetDto`****&#x20;response** now includes `content_type_specific`, `ui_hint`, `unit`, `labels`, `priority` fields for type-specific facets
+
+  - **UI hint auto-inference** — when not explicitly set in the schema, `ui_hint` is inferred from enum count: ≤6 → `chips`, 7-15 → `checkboxes`, >15 → `searchable_checkboxes`
+
+  **Query builder**
+
+  - **`applyTypeFilters()`** — new filter method handling `type_filters.*` keys with support for terms (string/array), boolean, and range (`min`/`max` or `gte`/`lte`) filters
+
+  - **`type_filters.*`****&#x20;pass-through** added to `mapGoalCatalogFilters()`, `buildGoalBatchQuery()`, and `buildRandomQuery()` global filter paths
+
+  **Aggregation pipeline**
+
+  - **`buildAggsFromFacetDefs()`** — new method in `SearchService` that builds ES aggregation clauses from `FacetDefinition[]` (terms, date\_histogram, stats for ranges)
+
+  - Both `search()` and `searchByGoalBatch()` now use facet-definition-driven aggregations instead of hard-coded defaults
 </Update>
 
 <Update label="2026-03-14" description="v1.1.0" tags={["feature"]}>
-## Batched goal search & random mode
+  ## Batched goal search & random mode
 
-**New endpoint: `POST /api/v1/search/by-goals`**
-- Accepts an array of pre-resolved `content_queries` from one or many user goals and builds a **single Elasticsearch `bool.should` query** — enabling 150+ content_queries to execute in one ES request instead of 150 separate ones
-- Each content_query becomes a `should` clause with content_type filter, classification filters, and relevance-based boost weighting (high=1.5, medium=1.0, low=0.5)
-- Supports **named queries** for goal attribution — each clause carries `_name: "goal:{goalId}:cq:{index}"` so ES returns `matched_queries` identifying which goals matched each result
-- Global user filters (date range, language, publisher, geographic) applied at the top-level `filter` clause across all goal queries
-- Uses wildcard index `roadbeat-content-*` to avoid `index_not_found_exception` when some content types have no indexed content yet
+  **New endpoint:&#x20;****`POST /api/v1/search/by-goals`**
 
-**Random / Surprise mode**
-- New `random` flag on the batch endpoint triggers `function_score` with `random_score` for serendipitous content discovery
-- Session-stable pagination via `random_seed` — same seed produces same ordering within a session
-- Optional light bias from user's goal categories (low boost 0.3) so random results lean slightly toward the user's interests
+  - Accepts an array of pre-resolved `content_queries` from one or many user goals and builds a **single Elasticsearch&#x20;****`bool.should`****&#x20;query** — enabling 150+ content\_queries to execute in one ES request instead of 150 separate ones
 
-**Goal catalog filter mapping**
-- `mapGoalCatalogFilters()` translates goal catalog filter paths to Elasticsearch classification paths: `category.tags` → `classification.tags`, `category.categories` → `classification.categories`, `category.primary` → `classification.primary_category`, `category.topics` → `classification.topics`
-- DN-native paths (`classification.*`, `temporal.*`, `access.*`, `publisher.*`, `geographic.*`, `metadata.*`) passed through directly
-- Unknown content-type-specific keys (e.g. `event_type`, `mood`, `industry`) are silently ignored since the teaser generator does not populate them in the index
+  - Each content\_query becomes a `should` clause with content\_type filter, classification filters, and relevance-based boost weighting (high=1.5, medium=1.0, low=0.5)
+
+  - Supports **named queries** for goal attribution — each clause carries `_name: "goal:{goalId}:cq:{index}"` so ES returns `matched_queries` identifying which goals matched each result
+
+  - Global user filters (date range, language, publisher, geographic) applied at the top-level `filter` clause across all goal queries
+
+  - Uses wildcard index `roadbeat-content-*` to avoid `index_not_found_exception` when some content types have no indexed content yet
+
+  **Random / Surprise mode**
+
+  - New `random` flag on the batch endpoint triggers `function_score` with `random_score` for serendipitous content discovery
+
+  - Session-stable pagination via `random_seed` — same seed produces same ordering within a session
+
+  - Optional light bias from user's goal categories (low boost 0.3) so random results lean slightly toward the user's interests
+
+  **Goal catalog filter mapping**
+
+  - `mapGoalCatalogFilters()` translates goal catalog filter paths to Elasticsearch classification paths: `category.tags` → `classification.tags`, `category.categories` → `classification.categories`, `category.primary` → `classification.primary_category`, `category.topics` → `classification.topics`
+
+  - DN-native paths (`classification.*`, `temporal.*`, `access.*`, `publisher.*`, `geographic.*`, `metadata.*`) passed through directly
+
+  - Unknown content-type-specific keys (e.g. `event_type`, `mood`, `industry`) are silently ignored since the teaser generator does not populate them in the index
 </Update>
 
 <Update label="2026-03-10" description="v1.0.0" tags={["feature"]}>
-## Initial Release
+  ## Initial Release
 
-The roadbeat Discovery Node v1.0.0 includes a complete distributed search and content discovery server with the following capabilities:
+  The roadbeat Discovery Node v1.0.0 includes a complete distributed search and content discovery server with the following capabilities:
 
-**Search & Discovery**
-- Full-text BM25 search with German and English analyzers
-- Hybrid search (BM25 + kNN vector similarity) via OpenAI embeddings
-- Goal-based search with filterset template parameter substitution
-- Autocomplete suggestions with phrase prefix and fuzzy matching
-- 11 global facets + 4 content-type-specific facet sets
+  **Search & Discovery**
 
-**Content Ingest**
-- Teaser publish, update, delete, and batch operations (up to 100)
-- Ed25519 signature verification for content integrity
-- Automatic embedding generation at ingest time
-- Per-content-type Elasticsearch indices
+  - Full-text BM25 search with German and English analyzers
 
-**Publisher Management**
-- Publisher registration with one-time API key
-- DNS TXT record domain verification
-- 4-tier verification levels with tiered rate limits
-- Admin operations: key rotation, suspension, updates
+  - Hybrid search (BM25 + kNN vector similarity) via OpenAI embeddings
 
-**Node Federation**
-- Peer node directory with heartbeat protocol
-- Stale node detection (5-minute timeout)
-- Node registration, update, and removal
+  - Goal-based search with filterset template parameter substitution
 
-**Infrastructure**
-- Elasticsearch 8.11.4 with auto-created index templates
-- Redis caching for search results (30s), suggestions (60s), directory (5min)
-- NATS JetStream event streaming for teaser lifecycle events
-- PostgreSQL via Prisma ORM for metadata storage
+  - Autocomplete suggestions with phrase prefix and fuzzy matching
 
-**Transparency Website**
-- Next.js 14 public dashboard with 24 EU language support
-- Statistics page with Recharts visualizations
-- Real-time health monitoring (10s polling)
-- Content type browser, publisher directory
-- Dynamic legal pages (imprint, privacy, terms)
+  - 11 global facets + 4 content-type-specific facet sets
 
-**Security**
-- Helmet HTTP security headers
-- Global rate limiting (120 req/min/IP)
-- Per-publisher Redis sliding window rate limiter
-- SHA-256 hashed API keys with constant-time comparison
-- Input validation with class-validator (whitelist + forbidNonWhitelisted)
-- Configurable CORS
+  **Content Ingest**
 
-**DevOps**
-- Multi-stage Docker builds for API and Web
-- Production Docker Compose stack with Caddy reverse proxy
-- GitHub Actions CI pipeline (lint, build, Docker)
-- Environment validation with startup checks
+  - Teaser publish, update, delete, and batch operations (up to 100)
+
+  - Ed25519 signature verification for content integrity
+
+  - Automatic embedding generation at ingest time
+
+  - Per-content-type Elasticsearch indices
+
+  **Publisher Management**
+
+  - Publisher registration with one-time API key
+
+  - DNS TXT record domain verification
+
+  - 4-tier verification levels with tiered rate limits
+
+  - Admin operations: key rotation, suspension, updates
+
+  **Node Federation**
+
+  - Peer node directory with heartbeat protocol
+
+  - Stale node detection (5-minute timeout)
+
+  - Node registration, update, and removal
+
+  **Infrastructure**
+
+  - Elasticsearch 8.11.4 with auto-created index templates
+
+  - Redis caching for search results (30s), suggestions (60s), directory (5min)
+
+  - NATS JetStream event streaming for teaser lifecycle events
+
+  - PostgreSQL via Prisma ORM for metadata storage
+
+  **Transparency Website**
+
+  - Next.js 14 public dashboard with 24 EU language support
+
+  - Statistics page with Recharts visualizations
+
+  - Real-time health monitoring (10s polling)
+
+  - Content type browser, publisher directory
+
+  - Dynamic legal pages (imprint, privacy, terms)
+
+  **Security**
+
+  - Helmet HTTP security headers
+
+  - Global rate limiting (120 req/min/IP)
+
+  - Per-publisher Redis sliding window rate limiter
+
+  - SHA-256 hashed API keys with constant-time comparison
+
+  - Input validation with class-validator (whitelist + forbidNonWhitelisted)
+
+  - Configurable CORS
+
+  **DevOps**
+
+  - Multi-stage Docker builds for API and Web
+
+  - Production Docker Compose stack with Caddy reverse proxy
+
+  - GitHub Actions CI pipeline (lint, build, Docker)
+
+  - Environment validation with startup checks
 </Update>
+
