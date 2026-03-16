@@ -3,6 +3,28 @@ title: Changelog
 description: Release notes and version history for the roadbeat Discovery Node.
 ---
 
+<Update label="2026-03-16" description="v1.2.0" tags={["feature"]}>
+## Schema-driven content-type-specific filters
+
+**Dynamic facet engine**
+- **`DynamicFacetService`** — new service that reads `x-filter` annotations from content type metadata schemas (fetched from Schema Registry, cached 10 min) and dynamically builds `FacetDefinition[]` for any content type — zero hard-coded per-type configuration
+- **`type_filters` ES sub-object** — new `dynamic: true` sub-object in the ES index template with `dynamic_templates` mapping strings as `keyword` and date-suffixed fields as `date` — allows arbitrary filter fields without template changes
+- **Deleted `CONTENT_TYPE_FACETS`** — removed the hard-coded per-type facet map from `facet-config.ts`, replaced entirely by schema-driven definitions
+
+**Enhanced facet metadata**
+- **`FacetDefinition` interface** expanded with `labels` (multilingual), `ui_hint` (widget type), `unit` (range label), `priority` (display order), `content_type_specific` (boolean flag)
+- **`FacetDto` response** now includes `content_type_specific`, `ui_hint`, `unit`, `labels`, `priority` fields for type-specific facets
+- **UI hint auto-inference** — when not explicitly set in the schema, `ui_hint` is inferred from enum count: ≤6 → `chips`, 7-15 → `checkboxes`, >15 → `searchable_checkboxes`
+
+**Query builder**
+- **`applyTypeFilters()`** — new filter method handling `type_filters.*` keys with support for terms (string/array), boolean, and range (`min`/`max` or `gte`/`lte`) filters
+- **`type_filters.*` pass-through** added to `mapGoalCatalogFilters()`, `buildGoalBatchQuery()`, and `buildRandomQuery()` global filter paths
+
+**Aggregation pipeline**
+- **`buildAggsFromFacetDefs()`** — new method in `SearchService` that builds ES aggregation clauses from `FacetDefinition[]` (terms, date_histogram, stats for ranges)
+- Both `search()` and `searchByGoalBatch()` now use facet-definition-driven aggregations instead of hard-coded defaults
+</Update>
+
 <Update label="2026-03-14" description="v1.1.0" tags={["feature"]}>
 ## Batched goal search & random mode
 

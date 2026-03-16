@@ -39,34 +39,51 @@ These 11 facets are available for all content types:
   Facets marked as "Default: Yes" are automatically included in search responses. Non-default facets can be requested via custom aggregation definitions in the search request.
 </Callout>
 
-## Content-type-specific facets
+## Content-type-specific facets (schema-driven)
 
-When searching a single content type, additional type-specific facets are added:
+When searching a **single content type**, the Discovery Node dynamically adds type-specific facets derived from `x-filter` annotations in the content type's metadata schema. No hard-coded per-type configuration is needed — the `DynamicFacetService` reads the schema from the Schema Registry, walks its properties, and builds facet definitions automatically.
 
-<Tabs>
-  <Tab title="News" icon="newspaper">
-    | Facet | Field | Type |
-    |-------|-------|------|
-    | **Article Type** | `classification.article_type` | terms (10 buckets) |
-  </Tab>
-  <Tab title="Events" icon="calendar">
-    | Facet | Field | Type |
-    |-------|-------|------|
-    | **Event Type** | `classification.event_type` | terms (15 buckets) |
-    | **Event Date** | `temporal.event_date` | date_histogram (weekly) |
-    | **Cities** | `geographic.cities` | terms (30 buckets) |
-  </Tab>
-  <Tab title="Jobs" icon="briefcase">
-    | Facet | Field | Type |
-    |-------|-------|------|
-    | **Cities** | `geographic.cities` | terms (30 buckets) |
-  </Tab>
-  <Tab title="Recipes" icon="chef-hat">
-    | Facet | Field | Type |
-    |-------|-------|------|
-    | **Tags** | `classification.tags` | terms (30 buckets) |
-  </Tab>
-</Tabs>
+```mermaid
+graph LR
+    A[Single content type query] --> B[DynamicFacetService]
+    B --> C[Fetch metadata schema from Registry]
+    C --> D[Walk properties for x-filter]
+    D --> E[Build FacetDefinitions]
+    E --> F[Add to ES aggregations]
+```
+
+Type-specific facet values are stored in the `type_filters` sub-object of each teaser document. This sub-object uses `dynamic: true` in the ES mapping, so new filter fields are indexed automatically without template changes.
+
+<Callout kind="tip">
+  To add new filters to any content type, simply add an `x-filter` annotation to the relevant property in its metadata schema. No code changes required in the Discovery Node, Studio, or frontend.
+</Callout>
+
+### Example: Event type-specific facets
+
+When filtering to `content_types: ["event"]`, the following facets are automatically added based on the event metadata schema's `x-filter` annotations:
+
+| Facet | ES Field | Type | UI Hint |
+|-------|----------|------|---------|
+| **Event Type** | `type_filters.event_type` | terms | checkboxes |
+| **Format** | `type_filters.event_format` | terms | chips |
+| **Category** | `type_filters.event_category` | terms | searchable_checkboxes |
+| **Event Date** | `type_filters.event_date` | date_histogram | date_picker |
+| **Free Event** | `type_filters.is_free` | terms (boolean) | toggle |
+| **Audience** | `type_filters.audience_type` | terms | checkboxes |
+| **Skill Level** | `type_filters.skill_level` | terms | chips |
+| **Status** | `type_filters.event_status` | terms | chips |
+
+### Type-specific facet metadata
+
+Type-specific facets include additional metadata fields in the response to help frontends render appropriate widgets:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `content_type_specific` | boolean | `true` for schema-driven facets |
+| `ui_hint` | string | Widget hint: `chips`, `checkboxes`, `searchable_checkboxes`, `toggle`, `slider`, `date_picker`, `star_rating` |
+| `unit` | string | Unit label for range facets (e.g., `"m²"`, `"min"`, `"€"`) |
+| `labels` | object | Multilingual labels from the schema (e.g., `{ "en": "Event Type", "de": "Veranstaltungstyp" }`) |
+| `priority` | number | Display priority — lower values appear higher in the sidebar |
 
 ## Facet response format
 
