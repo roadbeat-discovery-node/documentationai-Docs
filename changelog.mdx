@@ -2,6 +2,24 @@
 title: Changelog
 description: Release notes and version history for the roadbeat Discovery Node.
 ---
+<Update label="2026-05-11" description="v1.3.0" tags={["docs"]}>
+  ## Gateway Developer Guide
+
+  New comprehensive guide for external CMS integration — publish content to the roadbeat ecosystem without running a Studio instance.
+
+  - **Publisher registration** — step-by-step registration, domain verification via DNS TXT, verification levels and rate limits
+  - **Teaser construction** — full documentation of all required and optional blocks (identifier, overview, classification, temporal, geographic, access, metadata) with field-level reference tables
+  - **Content signing** — Ed25519 canonicalization algorithm with code examples in Node.js, Python, and PHP
+  - **API reference** — publish, update, delete, retrieve, and batch operations (up to 100 per request)
+  - **CMS integration patterns** — webhook-triggered, scheduled sync, and in-process plugin architectures
+  - **Code examples** — complete WordPress plugin integration and Node.js/Express gateway middleware
+  - **Error handling** — HTTP status codes, validation error format, exponential backoff retry strategy
+  - **Security best practices** — key storage, HTTPS, key rotation guidance
+  - **FAQ** — multi-node publishing, multilingual content, static site generators, and more
+
+  Available at [/guides/gateway-developer-guide](/guides/gateway-developer-guide).
+</Update>
+
 <Update label="2026-03-16" description="v1.2.1" tags={["bugfix","feature"]}>
   ## Boolean filter coercion fix
 

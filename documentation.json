@@ -93,6 +93,17 @@
             ]
           },
           {
+            "group": "Guides",
+            "icon": "book-open",
+            "pages": [
+              {
+                "title": "Gateway Developer Guide",
+                "path": "guides/gateway-developer-guide",
+                "icon": "plug"
+              }
+            ]
+          },
+          {
             "group": "Deployment",
             "icon": "cloud",
             "pages": [
