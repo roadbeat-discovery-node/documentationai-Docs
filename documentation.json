@@ -89,6 +89,12 @@
                 "title": "Transparency Website",
                 "path": "features/website",
                 "icon": "globe"
+              },
+              {
+                "title": "Topic Relays (ActivityPub)",
+                "path": "features/topic-relays",
+                "icon": "rss",
+                "badge": "New"
               }
             ]
           },
