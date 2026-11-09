@@ -11,11 +11,15 @@ Many endpoints are open and do not require any authentication:
 
 - `POST /api/v1/search` — content search
 - `POST /api/v1/search/by-goal` — goal-based search
+- `POST /api/v1/search/by-goals` — batched goal search
 - `GET /api/v1/search/suggestions` — autocomplete
+- `GET /api/v1/teasers/:contentType/:slug` — public teaser lookup by content type + slug
 - `GET /api/v1/nodes` — public node directory
-- `GET /api/v1/publishers` — list publishers
-- `GET /api/v1/publishers/:id` — get publisher details
+- `GET /api/v1/publishers` — list publishers (public fields only)
+- `GET /api/v1/publishers/:id` — get publisher details (public fields only)
 - `GET /api/v1/publishers/:id/stats` — publisher statistics
+- `POST /api/v1/publishers/:id/verify-pod` — [Content Pod verification](/features/content-pod-publishers)
+- `POST /api/v1/publishers/:id/pod-sync` — apply the state the publisher's Content Pod declares
 - `GET /api/v1/stats/*` — all statistics endpoints
 - `GET /health` — health check
 - `GET /ready` — readiness probe
@@ -55,6 +59,14 @@ curl -X POST http://localhost:3300/api/v1/teasers \
 | `DELETE` | `/api/v1/teasers/:teaserId` | Remove a teaser |
 | `GET` | `/api/v1/teasers/:teaserId` | Get a teaser |
 | `POST` | `/api/v1/teasers/batch` | Batch operations |
+| `GET` | `/api/v1/publishers/me` | Whom the key belongs to |
+| `PUT` | `/api/v1/publishers/me/description` | Set / remove the About text |
+| `PUT` | `/api/v1/publishers/me/avatar` | Set / remove the publisher picture |
+| `PUT` | `/api/v1/publishers/me/public-key` | Replace the Ed25519 signing key |
+| `POST` | `/api/v1/publishers/me/deactivate` | Switch the own publisher off |
+| `POST` | `/api/v1/publishers/me/reactivate` | Switch the own publisher back on |
+
+The `/publishers/me…` endpoints are described in [Publisher Self-Service](/features/publisher-self-service).
 
 ### How it works
 
@@ -62,7 +74,8 @@ curl -X POST http://localhost:3300/api/v1/teasers \
 2. The `PublisherAuthGuard` hashes the key with SHA-256
 3. The hash is matched against the `api_key_hash` column in the `publishers` table
 4. Suspended publishers are automatically rejected (excluded from the lookup)
-5. On success, the publisher's identity is attached to the request for downstream authorization checks
+5. Publishers deactivated by their owner are rejected with `403` — except for `me/reactivate` and `me/public-key`
+6. On success, the publisher's identity is attached to the request for downstream authorization checks
 
 ### Error responses
 
@@ -72,6 +85,9 @@ curl -X POST http://localhost:3300/api/v1/teasers \
 
 // Invalid key or suspended publisher
 { "statusCode": 401, "message": "Invalid API key" }
+
+// Publisher switched off by its owner
+{ "statusCode": 403, "message": "Publisher is deactivated by its owner" }
 ```
 
 ## Admin authentication
@@ -105,6 +121,7 @@ curl -X GET http://localhost:3300/api/v1/admin/config \
 | `GET/POST` | `/api/v1/admin/incidents` | Manage incidents |
 | `POST` | `/api/v1/admin/incidents/:id/resolve` | Resolve incident |
 | `PUT` | `/api/v1/publishers/:id` | Update publisher |
+| `GET` | `/api/v1/publishers/:id/contact` | Read publisher contact details |
 | `POST` | `/api/v1/publishers/:id/rotate-key` | Rotate publisher key |
 | `POST` | `/api/v1/publishers/:id/suspend` | Suspend publisher |
 | `GET` | `/api/v1/nodes/all` | List all nodes (incl. offline) |

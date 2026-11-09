@@ -39,7 +39,8 @@ The website runs on port **3301** and is built with Next.js 14 (App Router), Tai
     - Verification status badge
     - Trust level indicator
     - Document count
-    - Filterable by type and status, sortable
+    - Filterable by type and status, sortable by name, type, document count, verification status, trust level, or registration date (newest first by default)
+    - Public fields only — publisher contact data is never shown
   </Tab>
   <Tab title="Health" icon="activity">
     Real-time health dashboard with:
@@ -82,6 +83,21 @@ The website communicates with the Discovery Node API via dedicated read-only end
 <Callout kind="info">
   Website API endpoints are rate-limited to 120 requests/minute per IP, separate from the main API throttle.
 </Callout>
+
+### Publisher list sorting
+
+`GET /api/web/v1/publishers` accepts `sort` and `order` (`asc` / `desc`, default `desc`). Only these columns can be sorted on — both camelCase and snake_case spellings are accepted:
+
+| `sort` | Column |
+|--------|--------|
+| `createdAt` / `created_at` | Registration date (default) |
+| `name` | Name |
+| `type` | Publisher type |
+| `documentCount` / `document_count` | Number of teasers |
+| `verificationStatus` / `verification_status` | Verification status |
+| `trustLevel` / `trust_level` | Trust level |
+
+Any other value falls back to `createdAt`. Sorting on private columns (such as the contact e-mail) is not possible, so the sort order cannot reveal private data.
 
 ## Internationalization
 

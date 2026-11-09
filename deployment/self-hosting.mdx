@@ -71,6 +71,12 @@ graph TD
     ADMIN_API_KEY=strong-random-admin-key-here
     CORS_ORIGIN=https://discover.yourdomain.com
     NODE_ENV=production
+    # One reverse proxy (Caddy): client IP for rate limiting from X-Forwarded-For
+    TRUST_PROXY=1
+
+    # Content Pod verification (publishers without an own domain)
+    POD_VERIFY_HOSTS=.pods.roadbeat.net
+    POD_VERIFY_INSECURE_HOSTS=
 
     # Elasticsearch
     ELASTICSEARCH_URL=http://elasticsearch:9200
@@ -104,6 +110,10 @@ graph TD
     ```
 
     Caddy automatically provisions and renews Let's Encrypt TLS certificates.
+
+    <Callout kind="alert">
+      The production compose file also publishes the API port `3300`, which bypasses Caddy. With `TRUST_PROXY=1`, firewall that port (or bind it to `127.0.0.1`) so clients cannot fake their address in `X-Forwarded-For` — see [Reverse proxy and client IP](/deployment/configuration#reverse-proxy-and-client-ip).
+    </Callout>
   </Step>
 
   <Step title="Build and start">

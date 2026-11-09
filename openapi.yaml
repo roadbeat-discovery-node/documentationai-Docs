@@ -42,6 +42,27 @@ paths:
           description: ''
       tags:
         - search
+  /api/v1/search/by-goals:
+    post:
+      operationId: SearchController_searchByGoalBatch
+      summary: Batched goal search — single ES query from multiple content_queries
+      description: >-
+        Accepts pre-resolved content_queries from one or many goals, builds a
+        single Elasticsearch bool.should query, and returns merged results
+        ranked by relevance. Supports random mode for surprise/serendipity
+        discovery.
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalBatchSearchDto'
+      responses:
+        '201':
+          description: ''
+      tags:
+        - search
   /api/v1/search/suggestions:
     get:
       operationId: SearchController_getSuggestions
@@ -104,27 +125,47 @@ paths:
       operationId: EmbeddingController_findSimilar
       summary: Find similar teasers (more like this)
       description: >-
-        Returns teasers with the most similar embedding vectors to the given
-        teaser.
+        Returns teasers similar to the given one (its `teaser_id` or document
+        `_id`). Uses the embedding vectors when the embedding service is enabled
+        and the teaser has one; otherwise (and if the vector search fails)
+        Elasticsearch `more_like_this` over headline, description, categories,
+        topics and tags. `method` in the response says which. The teaser itself,
+        expired teasers and teasers of switched-off publishers are never
+        returned.
       parameters:
         - name: teaserId
           required: true
           in: path
+          description: teaser_id (as in search results) or the document _id
           schema:
             type: string
         - name: limit
           required: false
           in: query
+          description: 1-50, default 10
           schema:
             type: number
         - name: index
           required: false
           in: query
+          description: '"roadbeat-content-*" (default) or "roadbeat-content-<content type>"'
           schema:
             type: string
       responses:
         '201':
-          description: ''
+          description: Similar teasers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimilarTeasersResponseDto'
+        '400':
+          description: >-
+            `index` is neither `roadbeat-content-*` nor
+            `roadbeat-content-<content type>`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
       tags:
         - embedding
   /api/v1/embedding/search:
@@ -222,10 +263,307 @@ paths:
           description: ''
       tags:
         - publishers
+  /api/v1/publishers/me/public-key:
+    put:
+      operationId: PublishersController_updateOwnPublicKey
+      summary: Replace the own Ed25519 public key
+      description: >-
+        Replaces the publisherâ€™s Ed25519 public key. The request must prove
+        possession of the NEW key: `signature` is the base64 Ed25519 signature
+        of `roadbeat-key-rotation:<publisherId>:<timestamp>` made with the new
+        key, and `timestamp` (ISO 8601) is at most 5 minutes old. Reachable
+        while the publisher is deactivated by its owner.
+      parameters:
+        - name: X-Publisher-Key
+          in: header
+          description: Publisher API key (`rb_pub_â€¦`) of the calling publisher
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated publisher record (owner view)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnPublisherDto'
+        '400':
+          description: >-
+            Not an Ed25519 PEM key, or the proof of possession is invalid /
+            older than 5 minutes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+        '401':
+          description: Missing or invalid X-Publisher-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+      tags:
+        - publishers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOwnPublicKeyDto'
+  /api/v1/publishers/me:
+    get:
+      operationId: PublishersController_getOwn
+      summary: Who the publisher key belongs to
+      description: >-
+        Returns { id, name, domain } of the calling publisher — a client can
+        check it before it writes.
+      parameters:
+        - name: X-Publisher-Key
+          in: header
+          description: Publisher API key (`rb_pub_â€¦`) of the calling publisher
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Identity of the calling publisher
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublisherIdentityDto'
+        '401':
+          description: Missing or invalid X-Publisher-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+        '403':
+          description: Publisher is deactivated by its owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+      tags:
+        - publishers
+  /api/v1/publishers/me/description:
+    put:
+      operationId: PublishersController_updateOwnDescription
+      summary: Set or remove the own "About" text
+      description: >-
+        Body: { description } — { "<two-letter language>": "<plain text, max.
+        2000 characters>" }, or null to remove it.
+      parameters:
+        - name: X-Publisher-Key
+          in: header
+          description: Publisher API key (`rb_pub_â€¦`) of the calling publisher
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated publisher record (owner view)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnPublisherDto'
+        '400':
+          description: >-
+            Not an object, a key is not a two-letter language, a text is longer
+            than 2,000 characters, or more than 30 languages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+        '401':
+          description: Missing or invalid X-Publisher-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+        '403':
+          description: Publisher is deactivated by its owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+      tags:
+        - publishers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOwnDescriptionDto'
+  /api/v1/publishers/me/avatar:
+    put:
+      operationId: PublishersController_updateOwnAvatar
+      summary: Set or remove the own publisher picture
+      description: >-
+        Body: { avatar_url } - a file inside the own verified Content Pod (pod
+        publishers), or null to remove it. Opt-in by the owner.
+      parameters:
+        - name: X-Publisher-Key
+          in: header
+          description: Publisher API key (`rb_pub_â€¦`) of the calling publisher
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated publisher record (owner view)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnPublisherDto'
+        '400':
+          description: >-
+            The URL is not a file inside the publisherâ€™s own verified Content
+            Pod
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+        '401':
+          description: Missing or invalid X-Publisher-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+        '403':
+          description: Publisher is deactivated by its owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+      tags:
+        - publishers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOwnAvatarDto'
+  /api/v1/publishers/me/deactivate:
+    post:
+      operationId: PublishersController_deactivateSelf
+      summary: Deactivate the own publisher (no ingest until reactivated)
+      parameters:
+        - name: X-Publisher-Key
+          in: header
+          description: Publisher API key (`rb_pub_â€¦`) of the calling publisher
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Publisher deactivated â€” updated record (owner view)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnPublisherDto'
+        '401':
+          description: Missing or invalid X-Publisher-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+        '403':
+          description: Publisher is already deactivated by its owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+      tags:
+        - publishers
+      description: >-
+        Switches the own publisher off: no ingest, and all its teasers disappear
+        from search, lookups and "more like this" (they stay in the index, so
+        reactivation restores them instantly). While deactivated, only
+        `reactivate` and `me/public-key` accept the key.
+  /api/v1/publishers/me/reactivate:
+    post:
+      operationId: PublishersController_reactivateSelf
+      summary: Reactivate the own publisher
+      parameters:
+        - name: X-Publisher-Key
+          in: header
+          description: Publisher API key (`rb_pub_â€¦`) of the calling publisher
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Publisher reactivated â€” updated record (owner view)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnPublisherDto'
+        '401':
+          description: Missing or invalid X-Publisher-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+      tags:
+        - publishers
+      description: >-
+        Switches the own publisher back on; its teasers are visible again
+        immediately.
+  /api/v1/publishers/{id}/pod-sync:
+    post:
+      operationId: PublishersController_podSync
+      summary: Apply the state the publisherâ€™s Content Pod declares
+      description: >-
+        Reads `/.well-known/roadbeat-publisher.json` on the publisherâ€™s
+        Content Pod (configured pod hosts only) and applies it: `status:
+        "suspended"` or `"deactivated"` deactivates the publisher, any other
+        status reactivates it, and `status: "deleted"` removes the publisher
+        together with all its teasers (account purge). A new `publicKey` in the
+        document is taken over only with `{ timestamp, signature }` proving
+        possession of that key; a new API key is then returned once (key
+        rotation after losing the device). No API key needed â€” the pod
+        document is the ownerâ€™s authority.
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Applied state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PodSyncResultDto'
+        '400':
+          description: >-
+            Not hosted on a known Content Pod, well-known document
+            unreachable/invalid, or publisher not listed in it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+        '404':
+          description: Publisher not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+      tags:
+        - publishers
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyRotationProofDto'
   /api/v1/publishers:
     get:
       operationId: PublishersController_findAll
       summary: List all publishers
+      description: >-
+        Public fields only — contact person and e-mail are never part of this
+        response.
       parameters:
         - name: type
           required: false
@@ -252,15 +590,28 @@ paths:
           in: query
           schema:
             type: number
+        - name: q
+          required: false
+          in: query
+          description: Text search in name and domain
+          schema:
+            type: string
       responses:
         '200':
           description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicPublisherListDto'
       tags:
         - publishers
   /api/v1/publishers/{id}:
     get:
       operationId: PublishersController_findById
       summary: Get publisher by ID
+      description: >-
+        Public fields only — contact person and e-mail are never part of this
+        response.
       parameters:
         - name: id
           required: true
@@ -270,6 +621,10 @@ paths:
       responses:
         '200':
           description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicPublisherDto'
       tags:
         - publishers
     put:
@@ -296,6 +651,34 @@ paths:
       responses:
         '200':
           description: ''
+      tags:
+        - publishers
+  /api/v1/publishers/{id}/contact:
+    get:
+      operationId: PublishersController_getContact
+      summary: Get publisher contact details (admin)
+      description: >-
+        Contact person and e-mail given at registration — for the node operator
+        only (GDPR).
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublisherContactResponseDto'
       tags:
         - publishers
   /api/v1/publishers/{id}/rotate-key:
@@ -338,6 +721,38 @@ paths:
       responses:
         '201':
           description: ''
+      tags:
+        - publishers
+  /api/v1/publishers/{id}/verify-pod:
+    post:
+      operationId: PublishersController_verifyPod
+      summary: Verify the publisher via its Content Pod
+      description: >-
+        For publishers without an own domain (local mobile accounts): checks
+        `/.well-known/roadbeat-publisher.json` on the Content Pod of the
+        publisher (public key + publisher id). Only configured pod hosts are
+        fetched.
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        '201':
+          description: >-
+            Verification result. On success an `unverified` publisher becomes
+            `pod_verified`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PodVerificationResultDto'
+        '404':
+          description: Publisher not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
       tags:
         - publishers
   /api/v1/publishers/{id}/suspend:
@@ -383,7 +798,7 @@ paths:
       description: >-
         Index a new content teaser into Elasticsearch. The teaser is validated,
         optionally signature-verified, and indexed into the
-        `roadbeat-content-{type}` index.
+        content-type-specific index (`roadbeat-content-{type}`).
       parameters:
         - name: X-Publisher-Key
           in: header
@@ -495,6 +910,31 @@ paths:
               $ref: '#/components/schemas/BatchOperationsDto'
       responses:
         '201':
+          description: ''
+      tags:
+        - teasers
+  /api/v1/teasers/{contentType}/{slug}:
+    get:
+      operationId: TeaserPublicController_getTeaserBySlug
+      summary: Get a teaser by content type and slug (public)
+      description: >-
+        Fetch a single indexed teaser document by its content type and slug.
+        Used by consumer BFF APIs (Studio, Web Client) to resolve a teaser
+        before fetching full body content from the canonical Content Pod URL. No
+        publisher authentication required.
+      parameters:
+        - name: contentType
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: slug
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        '200':
           description: ''
       tags:
         - teasers
@@ -675,8 +1115,8 @@ paths:
       operationId: AdminController_invalidateCache
       summary: Invalidate cache by pattern
       description: >-
-        Pass `{ "pattern": "search:*" }` to clear search cache, or
-        `{ "pattern": "all" }` to clear everything.
+        Pass `{ "pattern": "search:*" }` to clear search cache, or `{ "pattern":
+        "all" }` to clear everything.
       parameters:
         - name: X-Admin-Key
           in: header
@@ -745,7 +1185,7 @@ paths:
       parameters:
         - name: X-Admin-Key
           in: header
-          description: Admin API key
+          description: Admin API key for authentication
           required: true
           schema:
             type: string
@@ -765,7 +1205,7 @@ paths:
       parameters:
         - name: X-Admin-Key
           in: header
-          description: Admin API key
+          description: Admin API key for authentication
           required: true
           schema:
             type: string
@@ -781,7 +1221,7 @@ paths:
       parameters:
         - name: X-Admin-Key
           in: header
-          description: Admin API key
+          description: Admin API key for authentication
           required: true
           schema:
             type: string
@@ -859,10 +1299,10 @@ paths:
           required: false
           in: query
           schema:
-            type: string
             enum:
               - asc
               - desc
+            type: string
       responses:
         '200':
           description: ''
@@ -951,6 +1391,14 @@ tags:
     description: Statistics and metrics
   - name: web
     description: Website internal API
+  - name: embedding
+    description: Embeddings, semantic search and similar content
+  - name: statistics
+    description: Index, publisher and performance statistics
+  - name: admin
+    description: Node administration (admin key)
+  - name: website
+    description: Public transparency website API
 servers:
   - url: https://discover.roadbeat.net
     description: Production
@@ -966,6 +1414,10 @@ components:
       scheme: bearer
       bearerFormat: JWT
       type: http
+    admin-key:
+      type: apiKey
+      in: header
+      name: X-Admin-Key
   schemas:
     SearchQueryDto:
       type: object
@@ -1148,8 +1600,8 @@ components:
         goal_parameters:
           type: object
           description: >-
-            Goal-specific parameter substitutions (e.g.
-            `{ "city": "Berlin", "field": "Software Engineering" }`)
+            Goal-specific parameter substitutions (e.g. `{ "city": "Berlin",
+            "field": "Software Engineering" }`)
           example:
             city: Berlin
             field: Software Engineering
@@ -1167,6 +1619,71 @@ components:
           default: 50
       required:
         - goal_template_id
+    GoalContentQueryDto:
+      type: object
+      properties:
+        content_format:
+          type: string
+          description: Content type filter (e.g. "event", "course")
+        filters:
+          type: object
+          description: 'Goal catalog filters (e.g. { "category.tags": ["concert"] })'
+        relevance:
+          type: string
+          description: Relevance weighting from goal catalog
+          enum:
+            - high
+            - medium
+            - low
+        goal_id:
+          type: string
+          description: Goal ID this content_query belongs to (for attribution)
+    GoalBatchSearchDto:
+      type: object
+      properties:
+        content_queries:
+          description: All resolved content_queries to search (from one or many goals)
+          type: array
+          items:
+            $ref: '#/components/schemas/GoalContentQueryDto'
+        query:
+          description: >-
+            Free text within the goals: hits must match the text and at least
+            one content query (not in random mode)
+          allOf:
+            - $ref: '#/components/schemas/SearchQueryDto'
+        content_types:
+          description: Content types to restrict results (e.g. ["event", "news"])
+          example:
+            - event
+          type: array
+          items:
+            type: string
+        filters:
+          type: object
+          description: User-level filters applied globally (date range, language, etc.)
+        geo:
+          description: Geographic distance filter
+          allOf:
+            - $ref: '#/components/schemas/GeoFilterDto'
+        pagination:
+          description: Pagination options
+          allOf:
+            - $ref: '#/components/schemas/PaginationDto'
+        sort:
+          description: 'Sort order. Default: relevance then date.'
+          type: array
+          items:
+            type: string
+        random:
+          type: boolean
+          description: Enable random mode (for surprise/serendipity). Overrides sort.
+          default: false
+        random_seed:
+          type: number
+          description: Seed for random_score (same seed = same order within a session)
+      required:
+        - content_queries
     PublisherContactDto:
       type: object
       properties:
@@ -1231,6 +1748,128 @@ components:
         - domain
         - public_key
         - content_types
+        - contact
+    PublicPublisherDto:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 6f1c2a9e-4b1d-4d7a-9f3e-2c8b5a1d0e42
+        name:
+          type: string
+          example: EnergyNews DE
+        type:
+          type: string
+          example: media
+        domain:
+          type: string
+          example: energynews.de
+        studioNodeUrl:
+          type: object
+          nullable: true
+          example: https://studio.energynews.de
+        publicKey:
+          type: string
+          description: PEM-encoded Ed25519 public key (teaser signature verification)
+        avatarUrl:
+          type: object
+          nullable: true
+          description: Optional picture (owner opt-in)
+        description:
+          type: object
+          nullable: true
+          description: '"About" text per two-letter language'
+          example:
+            en: Energy news from Germany
+            de: Energie-Nachrichten aus Deutschland
+        contentTypes:
+          example:
+            - news
+            - events
+          type: array
+          items:
+            type: string
+        verificationStatus:
+          type: string
+          example: domain_verified
+        trustLevel:
+          type: string
+          example: new
+        rateLimits:
+          type: object
+          example:
+            teasers_per_day: 1000
+            requests_per_minute: 120
+        federationOptOut:
+          type: boolean
+        ownerDeactivated:
+          type: boolean
+        documentCount:
+          type: number
+        lastIngestAt:
+          type: string
+          nullable: true
+          format: date-time
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - type
+        - domain
+        - publicKey
+        - contentTypes
+        - verificationStatus
+        - trustLevel
+        - rateLimits
+        - federationOptOut
+        - ownerDeactivated
+        - documentCount
+        - isActive
+        - createdAt
+        - updatedAt
+    PublicPublisherListDto:
+      type: object
+      properties:
+        publishers:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicPublisherDto'
+        total:
+          type: number
+      required:
+        - publishers
+        - total
+    PublisherContactDetailsDto:
+      type: object
+      properties:
+        name:
+          type: object
+          nullable: true
+          example: John Doe
+        email:
+          type: string
+          example: publisher@example.com
+      required:
+        - email
+    PublisherContactResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        contact:
+          $ref: '#/components/schemas/PublisherContactDetailsDto'
+      required:
+        - id
+        - name
         - contact
     UpdatePublisherDto:
       type: object
@@ -1300,3 +1939,181 @@ components:
             $ref: '#/components/schemas/BatchOperationDto'
       required:
         - operations
+    ErrorResponseDto:
+      type: object
+      properties:
+        statusCode:
+          type: number
+          example: 400
+        message:
+          type: string
+          example: avatar_url must point into your own verified Content Pod
+        error:
+          type: string
+          example: Bad Request
+    OwnPublisherDto:
+      type: object
+      description: >-
+        The publisher record as returned to its OWNER (registration and
+        self-service responses). Contains all public fields plus the contact
+        data; the API key hash is never returned.
+      allOf:
+        - $ref: '#/components/schemas/PublicPublisherDto'
+      properties:
+        contactName:
+          type: string
+          nullable: true
+          example: Tech Team
+        contactEmail:
+          type: string
+          example: tech@energynews.de
+    PublisherIdentityDto:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 6f1c2a9e-4b1d-4d7a-9f3e-2c8b5a1d0e42
+        name:
+          type: string
+          example: Jane Doe
+        domain:
+          type: string
+          example: jane.pods.roadbeat.net
+      required:
+        - id
+        - name
+        - domain
+    KeyRotationProofDto:
+      type: object
+      description: >-
+        Proof of possession of a (new) Ed25519 key: the base64 signature of
+        `roadbeat-key-rotation:<publisherId>:<timestamp>`, made with that key.
+        The timestamp must be at most 5 minutes old.
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-11-09T10:15:00.000Z'
+        signature:
+          type: string
+          description: Base64-encoded Ed25519 signature
+          example: q3JkZ2Vuâ€¦
+    UpdateOwnPublicKeyDto:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/KeyRotationProofDto'
+      properties:
+        public_key:
+          type: string
+          description: New PEM-encoded Ed25519 public key (SPKI)
+          example: |-
+            -----BEGIN PUBLIC KEY-----
+            MCowBQYDK2VwAyEAâ€¦
+            -----END PUBLIC KEY-----
+      required:
+        - public_key
+        - timestamp
+        - signature
+    UpdateOwnDescriptionDto:
+      type: object
+      properties:
+        description:
+          type: object
+          nullable: true
+          description: >-
+            "About" text per two-letter language code (plain text, max. 2,000
+            characters each, max. 30 languages). `null` or `{}` removes the
+            text; empty entries are dropped.
+          additionalProperties:
+            type: string
+            maxLength: 2000
+          example:
+            en: Energy news from Germany
+            de: Energie-Nachrichten aus Deutschland
+    UpdateOwnAvatarDto:
+      type: object
+      properties:
+        avatar_url:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: >-
+            URL of a file inside the publisherâ€™s own verified Content Pod
+            (`pod_verified` publishers only). `null` or an empty string removes
+            the picture.
+          example: https://jane.pods.roadbeat.net/assets/avatar.webp
+    PodVerificationResultDto:
+      type: object
+      properties:
+        verified:
+          type: boolean
+          example: false
+        reason:
+          type: string
+          description: Why the verification failed (only when `verified` is false)
+          example: public key does not match
+      required:
+        - verified
+    PodSyncResultDto:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - active
+            - deactivated
+            - deleted
+          description: >-
+            State applied from the podâ€™s well-known document. `deleted`: the
+            publisher and all its teasers were removed.
+        key_rotated:
+          type: boolean
+          description: Whether the public key declared by the pod was taken over
+        api_key:
+          type: string
+          description: >-
+            New publisher API key â€” returned ONCE, only when `key_rotated` is
+            true. The old key stops working.
+          example: rb_pub_4f9câ€¦
+        reason:
+          type: string
+          description: >-
+            Set when the pod declares a new key but no valid proof of possession
+            was sent
+        teasers_deleted:
+          type: number
+          description: 'Number of removed teasers (only for `status: deleted`)'
+      required:
+        - status
+        - key_rotated
+    SimilarTeasersResponseDto:
+      type: object
+      properties:
+        source_teaser_id:
+          type: string
+          example: energynews-de:article-123
+        similar_count:
+          type: number
+          example: 10
+        method:
+          type: string
+          enum:
+            - vector
+            - more_like_this
+          description: >-
+            How the results were found: kNN over embedding vectors, or
+            Elasticsearch `more_like_this` over the text fields
+        results:
+          type: array
+          description: >-
+            Similar teasers (`_id`, `_index`, `_score` plus teaser_id,
+            content_type, identifier, overview, classification, publisher)
+          items:
+            type: object
+        error:
+          type: string
+          description: Set instead of the fields above when the teaser was not found
+          example: Teaser not found
+        teaser_id:
+          type: string
+          description: Set together with `error`

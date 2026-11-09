@@ -3,7 +3,16 @@ title: Publisher Management
 description: Registering, verifying, and managing publishers on a Discovery Node.
 ---
 
-Publishers are organizations or individuals that submit content teasers to a Discovery Node. Before publishing content, a publisher must register, receive an API key, and optionally verify their domain.
+Publishers are organizations or individuals that submit content teasers to a Discovery Node. Before publishing content, a publisher must register, receive an API key, and optionally verify their domain — or, for individuals without a domain, their [Content Pod](/features/content-pod-publishers).
+
+<Columns cols={2}>
+  <Card title="Publisher Self-Service" icon="user-cog" href="/features/publisher-self-service">
+    Manage your own publisher with its API key: About text, picture, key rotation, switch off and on.
+  </Card>
+  <Card title="Content Pod Publishers" icon="box" href="/features/content-pod-publishers">
+    Verification without a domain, and pod-controlled status, key rotation and deletion.
+  </Card>
+</Columns>
 
 ## Registration
 
@@ -29,7 +38,7 @@ curl -X POST http://localhost:3300/api/v1/publishers/register \
 
 ### Response
 
-The response includes the publisher record and a **one-time API key**. Store this key securely — it cannot be retrieved again.
+The response includes the publisher record (owner view, including your contact data) and a **one-time API key**. Store this key securely — it cannot be retrieved again.
 
 ```json
 {
@@ -87,16 +96,31 @@ Domain verification proves ownership of the publisher's domain via a DNS TXT rec
   </Step>
 </Steps>
 
+## Content Pod verification
+
+Publishers without a domain of their own (e.g. individuals publishing from the roadbeat app) verify their **Content Pod** instead of a DNS record: the pod serves `/.well-known/roadbeat-publisher.json` with the publisher id and public key, and `POST /api/v1/publishers/{id}/verify-pod` checks it.
+
+```bash
+curl -X POST http://localhost:3300/api/v1/publishers/{id}/verify-pod
+```
+
+```json
+{ "verified": true }
+```
+
+See [Content Pod Publishers](/features/content-pod-publishers) for the document format, allowed pod hosts, and pod sync.
+
 ## Verification levels
 
-| Level | Requirements | Teasers/day | Requests/min |
+| Level (`verificationStatus`) | Requirements | Teasers/day | Requests/min |
 |-------|-------------|-------------|--------------|
-| **Unverified** | Basic registration | 100 | 60 |
-| **Domain verified** | DNS TXT record | 1,000 | 120 |
-| **Organization verified** | Business registration proof | 10,000 | 300 |
-| **Trusted publisher** | Expert committee approval | 100,000 | 1,000 |
+| **Unverified** (`unverified`) | Basic registration | 100 | 60 |
+| **Pod verified** (`pod_verified`) | Content Pod well-known document | 100 | 60 |
+| **Domain verified** (`domain_verified`) | DNS TXT record | 1,000 | 120 |
+| **Organization verified** (`organization_verified`) | Business registration proof | 10,000 | 300 |
+| **Trusted publisher** (`trusted_publisher`) | Expert committee approval | 100,000 | 1,000 |
 
-Rate limits are enforced per-publisher using a Redis sliding window counter.
+Rate limits are enforced per-publisher using a Redis sliding window counter. Pod-verified publishers keep the limits of unverified publishers, but their teasers are marked `publisher.verified: true`.
 
 ## API key management
 
@@ -117,35 +141,110 @@ curl -X POST http://localhost:3300/api/v1/publishers/{id}/rotate-key \
 { "api_key": "rb_pub_new_key_here..." }
 ```
 
+<Callout kind="tip">
+  The **signing key** (Ed25519 public key) can be replaced by the publisher itself — see [Rotate the signing key](/features/publisher-self-service#rotate-the-signing-key). Content Pod publishers who lost their API key can get a new one through [pod sync](/features/content-pod-publishers#key-rotation-after-losing-the-device).
+</Callout>
+
 ## Listing publishers
 
 Retrieve a paginated, filterable list of all registered publishers:
 
 ```bash
-curl "http://localhost:3300/api/v1/publishers?type=media&status=domain_verified&skip=0&take=20"
+curl "http://localhost:3300/api/v1/publishers?type=media&status=domain_verified&q=energy&skip=0&take=20"
 ```
+
+| Query parameter | Description |
+|-----------------|-------------|
+| `type` | Publisher type (`media`, `organization`, …) |
+| `status` | Verification status (`unverified`, `pod_verified`, `domain_verified`, …) |
+| `trust_level` | Trust level (`new`, `established`, …) |
+| `q` | Case-insensitive text search in **name and domain** (max. 100 characters) — used by the publisher directory in consumer apps and Studio |
+| `skip`, `take` | Pagination |
 
 ```json
 {
   "publishers": [
     {
-      "id": "...",
+      "id": "6f1c2a9e-4b1d-4d7a-9f3e-2c8b5a1d0e42",
       "name": "EnergyNews DE",
       "type": "media",
       "domain": "energynews.de",
+      "studioNodeUrl": "https://studio.energynews.de",
+      "publicKey": "-----BEGIN PUBLIC KEY-----\n...",
+      "avatarUrl": null,
+      "description": { "en": "Energy news from Germany", "de": "Energie-Nachrichten aus Deutschland" },
+      "contentTypes": ["news", "events"],
       "verificationStatus": "domain_verified",
       "trustLevel": "new",
-      "contentTypes": ["news", "events"],
-      "createdAt": "2026-03-10T09:00:00Z"
+      "rateLimits": { "teasers_per_day": 1000, "requests_per_minute": 120 },
+      "federationOptOut": false,
+      "ownerDeactivated": false,
+      "documentCount": 1234,
+      "lastIngestAt": "2026-11-08T17:00:00Z",
+      "isActive": true,
+      "createdAt": "2026-03-10T09:00:00Z",
+      "updatedAt": "2026-11-08T17:00:00Z"
     }
   ],
   "total": 42
 }
 ```
 
+### Public publisher record
+
+`GET /api/v1/publishers` and `GET /api/v1/publishers/:id` are anonymous endpoints, so they return an **allowlist of public fields** only — exactly the fields shown above. A field added to the database stays private until it is deliberately added to that list.
+
 <Callout kind="info">
-  The `apiKeyHash` field is never included in API responses. Sensitive fields are stripped before returning publisher data.
+  **Privacy by design:** the contact person and e-mail given at registration (`contactName`, `contactEmail`) and the API key hash are **never** part of public responses. The publisher gets its own contact data back from the registration and [self-service](/features/publisher-self-service) responses; the node operator reads it via the admin endpoint below.
 </Callout>
+
+| Field | Description |
+|-------|-------------|
+| `avatarUrl` | Optional picture, set by the owner ([Content Pod publishers](/features/publisher-self-service#publisher-picture) only) |
+| `description` | Optional "About" text per two-letter language, set by the owner |
+| `ownerDeactivated` | `true` while the owner has [switched the publisher off](/features/publisher-self-service#switch-the-publisher-off-and-on) |
+| `federationOptOut` | `true` if the publisher's teasers must not be announced via [Topic Relays](/features/topic-relays) |
+
+### Contact details (admin)
+
+The node operator can read a publisher's contact details — for example to reach the publisher about a complaint:
+
+```bash
+curl http://localhost:3300/api/v1/publishers/{id}/contact \
+  -H "X-Admin-Key: YOUR_ADMIN_KEY"
+```
+
+```json
+{
+  "id": "6f1c2a9e-4b1d-4d7a-9f3e-2c8b5a1d0e42",
+  "name": "EnergyNews DE",
+  "contact": { "name": "Tech Team", "email": "tech@energynews.de" }
+}
+```
+
+## Switched-off publishers
+
+A publisher is **switched off** when its owner deactivated it ([self-service](/features/publisher-self-service#switch-the-publisher-off-and-on) or [pod sync](/features/content-pod-publishers#pod-sync)) or an admin suspended it. The content of switched-off publishers is offline everywhere:
+
+- content search (`/search`), batched goal search (`/search/by-goals`) and suggestions,
+- teaser lookups by ID and by content type + slug,
+- similar content ("more like this").
+
+The teasers stay in the Elasticsearch index, so reactivating the publisher restores them instantly.
+
+## Self-service
+
+With its API key (`X-Publisher-Key`), a publisher manages its own record — no admin needed:
+
+| Operation | Method | Endpoint |
+|-----------|--------|----------|
+| Who owns this key? | `GET` | `/api/v1/publishers/me` |
+| Set / remove About text | `PUT` | `/api/v1/publishers/me/description` |
+| Set / remove picture | `PUT` | `/api/v1/publishers/me/avatar` |
+| Replace signing key | `PUT` | `/api/v1/publishers/me/public-key` |
+| Switch off / on | `POST` | `/api/v1/publishers/me/deactivate`, `/api/v1/publishers/me/reactivate` |
+
+Details: [Publisher Self-Service](/features/publisher-self-service).
 
 ## Publisher statistics
 
@@ -174,12 +273,13 @@ These endpoints require the `X-Admin-Key` header:
 | Operation | Method | Endpoint |
 |-----------|--------|----------|
 | Update publisher details | `PUT` | `/api/v1/publishers/:id` |
+| Read contact details | `GET` | `/api/v1/publishers/:id/contact` |
 | Rotate API key | `POST` | `/api/v1/publishers/:id/rotate-key` |
 | Suspend publisher | `POST` | `/api/v1/publishers/:id/suspend` |
 
 ### Suspending a publisher
 
-Suspended publishers cannot authenticate or publish content. All existing content remains indexed.
+Suspended publishers cannot authenticate or publish content. Their existing content remains indexed but is [hidden](#switched-off-publishers) from search and lookups.
 
 ```bash
 curl -X POST http://localhost:3300/api/v1/publishers/{id}/suspend \

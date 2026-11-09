@@ -89,6 +89,39 @@ description: Solutions for frequent errors and problems when working with the Di
     ```
     Restart the API after changing environment variables.
   </Expandable>
+
+  <Expandable title="403 — Publisher is deactivated by its owner">
+    The publisher was switched off — via `POST /api/v1/publishers/me/deactivate` or because its Content Pod declares `status: "suspended"` ([pod sync](/features/content-pod-publishers#pod-sync)). While switched off, the key only works for `me/reactivate` and `me/public-key`.
+
+    ```bash
+    curl -X POST http://localhost:3300/api/v1/publishers/me/reactivate \
+      -H "X-Publisher-Key: rb_pub_your_key_here"
+    ```
+
+    Content Pod publishers whose pod still says `suspended` should set the pod back to `active` and run pod sync instead — otherwise the next pod sync switches the publisher off again.
+  </Expandable>
+
+  <Expandable title="Pod verification returns verified: false">
+    The response's `reason` tells you what is wrong:
+    - `domain is not a known Content Pod host` — the publisher's `domain` is not covered by `POD_VERIFY_HOSTS` (or `POD_VERIFY_INSECURE_HOSTS` for local http pods).
+    - `well-known document: HTTP 404` — the pod does not serve `/.well-known/roadbeat-publisher.json` yet. Redirects are not followed.
+    - `public key does not match` — the document's `publicKey` differs from the key registered on the node.
+    - `publisher is not listed in the well-known document` — add the node's publisher id to `publishers[]`.
+
+    See [Content Pod Publishers](/features/content-pod-publishers).
+  </Expandable>
+</ExpandableGroup>
+
+## Rate limiting
+
+<ExpandableGroup>
+  <Expandable title="429 for many users at once behind a reverse proxy">
+    If all clients hit the global limit (120 requests/min) together, the node sees the proxy's address for every request. Set `TRUST_PROXY` to the number of proxies in front of the API — `1` for the standard Caddy setup — and check the startup log line `trust proxy: 1`. See [Reverse proxy and client IP](/deployment/configuration#reverse-proxy-and-client-ip).
+  </Expandable>
+
+  <Expandable title="Clients can bypass the rate limit with X-Forwarded-For">
+    This happens when `TRUST_PROXY=true` (every hop trusted) or when the API port is reachable without the proxy while `TRUST_PROXY=1`. Use a hop count instead of `true`, and firewall port `3300` (or bind it to `127.0.0.1`) — or set `TRUST_PROXY=false` if clients use the port directly.
+  </Expandable>
 </ExpandableGroup>
 
 ## Publishing errors
@@ -150,6 +183,16 @@ description: Solutions for frequent errors and problems when working with the Di
 
   <Expandable title="Suggestions return empty even with indexed content">
     Suggestions require at least 2 characters in the query parameter `q`. They search headline fields specifically — ensure your teasers have populated `overview.headline` fields.
+  </Expandable>
+
+  <Expandable title="A publisher's teasers no longer appear anywhere">
+    The publisher is probably **switched off** — deactivated by its owner (`ownerDeactivated: true` in `GET /api/v1/publishers/:id`) or suspended by an admin (`verificationStatus: "suspended"`). Its teasers stay in the index but are hidden from search, suggestions, lookups and "more like this" until it is reactivated. See [Switched-off publishers](/features/publishers#switched-off-publishers).
+
+    Also check whether the client sends the publisher in `filters["publisher.id_exclude"]` (muted publisher).
+  </Expandable>
+
+  <Expandable title="'More like this' reports method: more_like_this">
+    `POST /api/v1/embedding/similar/:teaserId` falls back to Elasticsearch `more_like_this` when the embedding service is disabled, the teaser has no embedding vector yet, or the vector search fails. Results are then based on shared words in headline, description, categories, topics and tags. To get vector similarity, configure `OPENAI_API_KEY` and [refresh the embeddings](/features/semantic-search#admin-embedding-refresh).
   </Expandable>
 </ExpandableGroup>
 

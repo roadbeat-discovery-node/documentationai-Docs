@@ -97,20 +97,24 @@ Search queries are also converted to embeddings for vector comparison. Query emb
 
 ## Similar content ("more like this")
 
-Find teasers with the most similar embeddings to a given teaser:
+Find teasers similar to a given teaser. The endpoint works **with and without embeddings**:
 
 ```bash
-curl -X POST http://localhost:3300/api/v1/embedding/similar/{teaserId}?limit=10
+curl -X POST "http://localhost:3300/api/v1/embedding/similar/{teaserId}?limit=10"
 ```
 
 ```json
 {
   "source_teaser_id": "abc-123",
   "similar_count": 10,
+  "method": "vector",
   "results": [
     {
       "_id": "publisher-x:article-789",
+      "_index": "roadbeat-content-news",
       "_score": 0.95,
+      "teaser_id": "publisher-x:article-789",
+      "content_type": "news",
       "identifier": { "slug": "related-article" },
       "overview": { "headline": { "en": "Related Content Title" } },
       "publisher": { "name": "Another Publisher" }
@@ -119,11 +123,30 @@ curl -X POST http://localhost:3300/api/v1/embedding/similar/{teaserId}?limit=10
 }
 ```
 
-The endpoint:
-1. Retrieves the source teaser's vector from Elasticsearch
-2. Executes a kNN search for the nearest neighbors
-3. Filters out the source document itself
-4. Returns results ranked by cosine similarity
+<ParamField path="teaserId" param-type="string" required="true">
+  The teaser's `teaser_id` (as in search results) or its document `_id` (`<publisherId>:<contentId>`).
+</ParamField>
+
+<ParamField query="limit" param-type="integer" required="false">
+  Number of results, 1–50. Default: 10.
+</ParamField>
+
+<ParamField query="index" param-type="string" required="false">
+  `roadbeat-content-*` (default, all content types) or `roadbeat-content-<content type>` to stay within one type. Any other index name is rejected with `400`.
+</ParamField>
+
+How the results are found — reported in `method`:
+
+| `method` | When | How |
+|----------|------|-----|
+| `vector` | Embeddings are enabled and the teaser has a `_semantic.combined_vector` | kNN search over the embedding vectors (cosine similarity) |
+| `more_like_this` | No embedding service, no vector on the teaser, or the kNN search fails | Elasticsearch `more_like_this` over headline, description, categories, topics, tags and semantic tags |
+
+In both modes the teaser itself, **expired** teasers (past `temporal.expires_at`), and teasers of [switched-off publishers](/features/publishers#switched-off-publishers) are never returned. If the teaser does not exist (or its publisher is switched off), the response is `{ "error": "Teaser not found", "teaser_id": "..." }`.
+
+<Callout kind="tip">
+  Because of the `more_like_this` fallback, "More like this" works on every node — including nodes that run without an embedding API.
+</Callout>
 
 ## Pure semantic search endpoint
 

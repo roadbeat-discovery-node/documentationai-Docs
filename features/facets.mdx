@@ -39,6 +39,8 @@ These 11 facets are available for all content types:
   Facets marked as "Default: Yes" are automatically included in search responses. Non-default facets can be requested via custom aggregation definitions in the search request.
 </Callout>
 
+To filter by a facet bucket, send the facet's field with the bucket key in `filters` — for the **Publishers** facet that is `{ "publisher.name": ["EnergyNews DE"] }`. See [Publisher filters](/features/search#publisher-filters).
+
 ## Content-type-specific facets (schema-driven)
 
 When searching a **single content type**, the Discovery Node dynamically adds type-specific facets derived from `x-filter` annotations in the content type's metadata schema. No hard-coded per-type configuration is needed — the `DynamicFacetService` reads the schema from the Schema Registry, walks its properties, and builds facet definitions automatically.

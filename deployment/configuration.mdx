@@ -31,10 +31,38 @@ These must be set for the API to start:
 | `ADMIN_API_KEY` | — | Admin API key for protected endpoints. If unset, admin endpoints return 401. |
 | `CORS_ORIGIN` | `*` | Allowed CORS origins. Comma-separated for multiple (e.g. `https://app.roadbeat.net,https://admin.roadbeat.net`) |
 | `NODE_ENV` | `development` | Set to `production` to enable CSP headers and stricter security |
+| `TRUST_PROXY` | `1` | Reverse proxies in front of the API — see [Reverse proxy and client IP](#reverse-proxy-and-client-ip) |
 
 <Callout kind="alert">
   In production, always set `ADMIN_API_KEY` to a strong random value and restrict `CORS_ORIGIN` to your domain(s). Never use wildcard CORS in production.
 </Callout>
+
+## Reverse proxy and client IP
+
+The global rate limit counts requests **per client address**. Behind a reverse proxy (Caddy in the standard deployment), the TCP peer is the proxy, so the client address must come from the `X-Forwarded-For` header — but only across hops the node trusts. `TRUST_PROXY` sets Express' `trust proxy` setting:
+
+| Value | Meaning |
+|-------|---------|
+| *unset* / `1` | **Default.** Exactly one reverse proxy. The client address is the `X-Forwarded-For` entry the proxy appended; anything a client put before it is ignored. |
+| `2`, `3`, … | That many proxies (e.g. an HTTP load balancer in front of Caddy) |
+| `0` / `false` / `off` / `no` / `none` | No proxy: `X-Forwarded-For` is ignored, the TCP peer is the client. Use this when clients reach the API port directly. |
+| `loopback`, `uniquelocal`, `linklocal`, IPs, CIDR subnets | Trust exactly these proxy addresses (comma-separated) |
+| `true` | Trust every hop — **unsafe**: clients can choose their own address and rate-limit bucket. Logged as a warning at startup. |
+
+The effective setting is logged at startup (`trust proxy: 1`). An invalid address list stops the API with exit code 1.
+
+<Callout kind="alert">
+  With `TRUST_PROXY=1`, the API port (3300) must only be reachable through the proxy. If the port is published directly, firewall it or bind it to `127.0.0.1` — or set `TRUST_PROXY=false` if clients really use it directly.
+</Callout>
+
+## Content Pod verification
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POD_VERIFY_HOSTS` | `.pods.roadbeat.net` | Hosts whose `/.well-known/roadbeat-publisher.json` the node may fetch (https only). Comma-separated; an entry starting with `.` matches all subdomains. |
+| `POD_VERIFY_INSECURE_HOSTS` | *(empty)* | Exact `host[:port]` entries fetched over http — local development only. Leave empty in production. |
+
+Only these hosts are ever contacted for [pod verification and pod sync](/features/content-pod-publishers) — the node never fetches arbitrary URLs given by publishers.
 
 ## Embedding / semantic search
 
@@ -54,7 +82,7 @@ These must be set for the API to start:
 
 Global rate limiting is configured in the application module:
 
-- **Global limit**: 120 requests/minute per IP (via @nestjs/throttler)
+- **Global limit**: 120 requests/minute per client IP (via @nestjs/throttler; the client IP follows [`TRUST_PROXY`](#reverse-proxy-and-client-ip))
 - **Website API**: 120 requests/minute per IP (separate throttle)
 - **Per-publisher limits**: Configured per verification level (stored in the `rate_limits` JSONB column)
 
@@ -95,6 +123,11 @@ NATS_URL="nats://localhost:4222"
 ADMIN_API_KEY="your-strong-random-admin-key"
 CORS_ORIGIN="http://localhost:3301"
 NODE_ENV=development
+TRUST_PROXY=1
+
+# Content Pod verification
+POD_VERIFY_HOSTS=".pods.roadbeat.net"
+POD_VERIFY_INSECURE_HOSTS=""
 
 # Semantic search (optional)
 OPENAI_API_KEY="sk-..."

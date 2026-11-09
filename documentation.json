@@ -81,6 +81,18 @@
                 "icon": "building"
               },
               {
+                "title": "Publisher Self-Service",
+                "path": "features/publisher-self-service",
+                "icon": "user-cog",
+                "badge": "New"
+              },
+              {
+                "title": "Content Pod Publishers",
+                "path": "features/content-pod-publishers",
+                "icon": "box",
+                "badge": "New"
+              },
+              {
                 "title": "Semantic Search",
                 "path": "features/semantic-search",
                 "icon": "brain"

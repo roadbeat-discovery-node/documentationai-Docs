@@ -19,6 +19,24 @@ description: Frequently asked questions about publisher registration, verificati
     ```
 
     This generates a new key and immediately invalidates the old one. Contact the node operator if you don't have admin access.
+
+    **Content Pod publishers** don't need an admin: publish the new public key in your pod's well-known document and call [pod sync](/features/content-pod-publishers#key-rotation-after-losing-the-device) with a proof of possession — the node returns a new API key once.
+  </Expandable>
+
+  <Expandable title="I don't have a domain. Can I still get verified?">
+    Yes — if you publish from a **Content Pod** (e.g. with the roadbeat app). The pod serves `/.well-known/roadbeat-publisher.json` with your publisher id and public key, and `POST /api/v1/publishers/{id}/verify-pod` marks you `pod_verified`. Your teasers then show as verified; the rate limits stay those of unverified publishers. See [Content Pod Publishers](/features/content-pod-publishers).
+  </Expandable>
+
+  <Expandable title="Is my contact e-mail visible to others?">
+    No. The contact person and e-mail you give at registration are never part of the public publisher endpoints or the transparency website. You get them back in your own registration and self-service responses; only the node operator can read them via an admin endpoint (`GET /api/v1/publishers/:id/contact`).
+  </Expandable>
+
+  <Expandable title="How do I add a description or picture to my publisher profile?">
+    Use the [self-service endpoints](/features/publisher-self-service) with your API key: `PUT /api/v1/publishers/me/description` sets an "About" text per language (plain text, up to 2,000 characters each). `PUT /api/v1/publishers/me/avatar` sets a picture — available to Content Pod publishers, and only for a file inside their own pod.
+  </Expandable>
+
+  <Expandable title="Can I take my content offline temporarily?">
+    Yes. `POST /api/v1/publishers/me/deactivate` switches your publisher off: no ingest, and all your teasers disappear from search and lookups — without being deleted. `POST /api/v1/publishers/me/reactivate` brings everything back instantly. See [Switch the publisher off and on](/features/publisher-self-service#switch-the-publisher-off-and-on).
   </Expandable>
 
   <Expandable title="What are the rate limits for publishers?">
@@ -27,6 +45,7 @@ description: Frequently asked questions about publisher registration, verificati
     | Level | Teasers/day | Requests/min |
     |-------|-------------|--------------|
     | Unverified | 100 | 60 |
+    | Pod verified | 100 | 60 |
     | Domain verified | 1,000 | 120 |
     | Organization verified | 10,000 | 300 |
     | Trusted publisher | 100,000 | 1,000 |
@@ -55,6 +74,6 @@ description: Frequently asked questions about publisher registration, verificati
   </Expandable>
 
   <Expandable title="What does 'suspended' mean?">
-    A suspended publisher cannot authenticate or publish new content. Existing teasers remain in the index. Suspension is an admin action typically triggered by abuse detection. Contact the node operator to appeal.
+    A suspended publisher cannot authenticate or publish new content. Existing teasers remain in the index but are hidden from search and lookups. Suspension is an admin action typically triggered by abuse detection. Contact the node operator to appeal.
   </Expandable>
 </ExpandableGroup>

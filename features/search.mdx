@@ -3,7 +3,7 @@ title: Search & Discovery
 description: Full-text search, goal-based search, and autocomplete suggestions in the Discovery Node.
 ---
 
-The Discovery Node provides three search endpoints: full-featured content search, goal-based search, and autocomplete suggestions. All search operations use Elasticsearch under the hood with optional semantic vector scoring.
+The Discovery Node provides four search endpoints: full-featured content search, goal-based search (template-based and batched), and autocomplete suggestions. All search operations use Elasticsearch under the hood with optional semantic vector scoring.
 
 ## Content search
 
@@ -121,9 +121,40 @@ Every search response includes metadata, results, faceted aggregations, and pagi
   Weight for BM25 scoring in hybrid mode (0.0–1.0). Vector weight = 1 - keyword_weight. Default: 0.7.
 </ParamField>
 
+### Publisher filters
+
+The `filters` map accepts these publisher keys — in `/search` as well as in the global `filters` of `/search/by-goals`:
+
+| Filter key | Value | Effect |
+|------------|-------|--------|
+| `publisher.id` | ID or array of IDs | Only content of these publishers |
+| `publisher.name` | Name or array of names | Only content of these publishers — the value the **Publishers** facet returns as bucket key |
+| `publisher.id_exclude` | ID or array of IDs | **Never** content of these publishers (muted publishers, "hide content from this publisher") |
+| `publisher.type` | Type or array | e.g. `media`, `organization` |
+| `publisher.trust_level` | Level or array | e.g. `established`, `trusted` |
+| `publisher.verified` | Boolean | Only verified (or unverified) publishers |
+
+```json
+{
+  "query": { "text": "solar" },
+  "filters": {
+    "publisher.name": ["EnergyNews DE"],
+    "publisher.id_exclude": ["0b7e1d9c-2f4a-4c55-8f0e-6a3b2c1d4e5f"]
+  }
+}
+```
+
+<Callout kind="info">
+  Muting is client-side: the consumer app keeps the list of muted publishers and sends it as `publisher.id_exclude` with every request — the node stores nothing about the user.
+</Callout>
+
+### Switched-off publishers
+
+Teasers of publishers that are [switched off](/features/publishers#switched-off-publishers) — deactivated by their owner or suspended by an admin — are excluded from every search, including semantic (kNN) search and suggestions. No filter is needed for this.
+
 ### Caching
 
-Search results are cached in Redis for **30 seconds**. Identical queries within the TTL return cached results with a fresh `request_id`. Cache can be manually invalidated via the admin API.
+Search results are cached in Redis for **30 seconds**. Identical queries within the TTL return cached results with a fresh `request_id`. The cache key is a SHA-256 hash of everything that shapes the answer — query, content types, filters, geo, **sort**, **pagination**, search mode, and requested aggregations — so requests that differ only in sort direction or page never share a cache entry. Cache can be manually invalidated via the admin API; it is also cleared automatically when a publisher is switched off or on.
 
 ## Goal-based search
 
@@ -163,6 +194,53 @@ curl -X POST http://localhost:3300/api/v1/search/by-goal \
     Results from all queries are merged, deduplicated by teaser ID, sorted by score then publication date, and trimmed to the maximum.
   </Step>
 </Steps>
+
+## Batched goal search
+
+Consumer apps (Web Client, mobile app) resolve the user's goals into `content_queries` themselves and send them in **one** request. The node turns them into a single Elasticsearch `bool.should` query — a hit must match at least one content query — and returns the same response format as `/search`, including facets and pagination.
+
+```bash
+curl -X POST http://localhost:3300/api/v1/search/by-goals \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content_queries": [
+      { "goal_id": "g-1", "content_format": "event", "filters": { "category.tags": ["concert"] }, "relevance": "high" },
+      { "goal_id": "g-2", "content_format": "news", "relevance": "medium" }
+    ],
+    "query": { "text": "jazz" },
+    "filters": { "access.languages": ["de", "en"], "publisher.id_exclude": ["0b7e1d9c-2f4a-4c55-8f0e-6a3b2c1d4e5f"] },
+    "geo": { "center": { "lat": 52.52, "lon": 13.405 }, "distance": "25km" },
+    "pagination": { "from": 0, "size": 20 }
+  }'
+```
+
+<ParamField body="content_queries" param-type="array" required="true">
+  Resolved content queries from one or many goals: `content_format` (content type), `filters` (goal catalog filters), `relevance` (`high` / `medium` / `low`), `goal_id` (attribution).
+</ParamField>
+
+<ParamField body="query" param-type="object" required="false">
+  **Free text within the goals.** `{ "text": "..." }` — hits must match the text **and** at least one content query. Uses the same multilingual, fuzzy matching as `/search`. Ignored in random mode.
+</ParamField>
+
+<ParamField body="filters" param-type="object" required="false">
+  Global user-level filters (date range, language, [publisher filters](#publisher-filters), type filters) applied to all content queries.
+</ParamField>
+
+<ParamField body="content_types" param-type="array" required="false">
+  Restrict results to these content types.
+</ParamField>
+
+<ParamField body="geo" param-type="object" required="false">
+  Geographic distance filter (`center`, `distance`).
+</ParamField>
+
+<ParamField body="sort" param-type="array" required="false">
+  Sort order. Default: relevance, then publication date.
+</ParamField>
+
+<ParamField body="random" param-type="boolean" required="false">
+  Random mode for surprise / serendipity discovery. Overrides the sort; `random_seed` keeps the order stable within a session.
+</ParamField>
 
 ## Autocomplete suggestions
 

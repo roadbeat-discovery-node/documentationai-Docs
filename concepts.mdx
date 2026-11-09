@@ -47,11 +47,12 @@ A **publisher** is any organization or individual that submits teasers to a Disc
 | Level | Requirements | Rate limits |
 |-------|-------------|-------------|
 | **Unverified** | Basic registration | 100 teasers/day, 60 req/min |
+| **Pod verified** | [Content Pod](/features/content-pod-publishers) well-known document (publishers without a domain) | 100 teasers/day, 60 req/min |
 | **Domain verified** | DNS TXT record proof | 1,000 teasers/day, 120 req/min |
 | **Organization verified** | Business registration | 10,000 teasers/day, 300 req/min |
 | **Trusted publisher** | Expert committee approval | 100,000 teasers/day, 1,000 req/min |
 
-Publishers authenticate using an API key sent via the `X-Publisher-Key` header. Keys are SHA-256 hashed at rest.
+Publishers authenticate using an API key sent via the `X-Publisher-Key` header. Keys are SHA-256 hashed at rest. With the same key, a publisher manages its own record — About text, picture, signing key, and switching itself off and on ([Publisher Self-Service](/features/publisher-self-service)).
 
 ## Goal-driven search
 

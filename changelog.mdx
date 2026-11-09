@@ -2,6 +2,68 @@
 title: Changelog
 description: Release notes and version history for the roadbeat Discovery Node.
 ---
+<Update label="2026-11-09" description="v1.5.1" tags={["security","bugfix"]}>
+  ## Privacy, rate limiting and "more like this"
+
+  **Publisher contact data stays private**
+
+  - `GET /api/v1/publishers` and `GET /api/v1/publishers/:id` now return an **allowlist of public fields** — the contact person and e-mail (`contactName`, `contactEmail`) are no longer part of public responses. New database columns stay private until they are added to the list on purpose.
+  - New admin endpoint **`GET /api/v1/publishers/:id/contact`** (`X-Admin-Key`) for the node operator.
+  - The transparency website's publisher list (`GET /api/web/v1/publishers`) only sorts by an allowlist of public columns; unknown sort fields fall back to `createdAt` instead of failing with `500`.
+
+  **Rate limiting per client behind the reverse proxy**
+
+  - New variable **`TRUST_PROXY`** (default `1` = one reverse proxy). The global limit of 120 requests/min is now counted per real client address taken from `X-Forwarded-For` across trusted hops — previously all clients behind Caddy shared one bucket.
+  - `TRUST_PROXY=true` logs a warning; an invalid value stops the API at startup. See [Reverse proxy and client IP](/deployment/configuration#reverse-proxy-and-client-ip).
+
+  **"More like this" without embeddings**
+
+  - `POST /api/v1/embedding/similar/:teaserId` falls back to Elasticsearch `more_like_this` (headline, description, categories, topics, tags) when no embeddings are available or the vector search fails. The response's new `method` field says which (`vector` / `more_like_this`).
+  - Finds the source teaser by `teaser_id` or document `_id` (the old lookup field was not mapped), excludes expired teasers and switched-off publishers, limits `limit` to 1–50, and only accepts `roadbeat-content-*` indices.
+
+  See [Semantic Search](/features/semantic-search#similar-content-more-like-this) and [Publisher Management](/features/publishers#public-publisher-record).
+</Update>
+
+<Update label="2026-11-08" description="v1.5.0" tags={["feature","bugfix"]}>
+  ## Publisher "About" text, search fixes
+
+  - **About text per language** — `PUT /api/v1/publishers/me/description` sets `{ "<language>": "<plain text>" }` (max. 2,000 characters each); the text is part of the public publisher record as `description`.
+  - **Fix: search cache key** — the cache key is now a SHA-256 of the full request. Before, requests that differed only in sort direction or page could get the cached answer of another request for 30 s ("Title Z→A" showed A→Z, page 2 showed page 1).
+  - **Fix: Publishers facet** — the `publisher.name` filter (sent when a bucket of the Publishers facet is checked) was ignored and returned every publisher's content.
+
+  **Database migration:** `description` (JSONB) on `publishers` — run `prisma migrate deploy` when updating.
+
+  See [Publisher Self-Service](/features/publisher-self-service#about-text) and [Publisher filters](/features/search#publisher-filters).
+</Update>
+
+<Update label="2026-11-07" description="v1.4.0" tags={["feature","bugfix"]}>
+  ## Content Pod publishers and publisher self-service
+
+  **Content Pod verification** — publishers without a domain of their own verify through their Content Pod:
+
+  - `POST /api/v1/publishers/:id/verify-pod` checks `/.well-known/roadbeat-publisher.json` (publisher id + public key) and marks the publisher `pod_verified` (verified badge, rate limits of unverified publishers).
+  - `POST /api/v1/publishers/:id/pod-sync` applies what the pod declares: `suspended` switches the publisher off, `active` on, `deleted` removes the publisher **and all its teasers**; a new public key is taken over with a proof of possession, and a new API key is returned once.
+  - Only hosts in the new variables `POD_VERIFY_HOSTS` (default `.pods.roadbeat.net`, https) and `POD_VERIFY_INSECURE_HOSTS` (http, development only) are fetched.
+
+  **Publisher self-service** (with `X-Publisher-Key`):
+
+  - `GET /api/v1/publishers/me` — whom the key belongs to.
+  - `PUT /api/v1/publishers/me/public-key` — replace the Ed25519 key, signed proof with the new key required.
+  - `POST /api/v1/publishers/me/deactivate` / `reactivate` — switch the publisher off and on.
+  - `PUT /api/v1/publishers/me/avatar` — optional publisher picture, opt-in, Content Pod publishers only and only a file inside their own pod.
+
+  **Switched-off publishers are offline** — teasers of publishers deactivated by their owner or suspended by an admin are hidden from search, goal search, suggestions, teaser lookups and similar content; they stay in the index and return instantly on reactivation. Deactivated publishers get `403` on ingest.
+
+  **Search**
+
+  - **Free text within goals** — `POST /api/v1/search/by-goals` accepts `query.text`: hits must match the text and at least one content query.
+  - **Fix: muted publishers** — the `publisher.id_exclude` filter is now honoured in `/search` and `/search/by-goals`.
+  - **Fix: directory search** — `GET /api/v1/publishers?q=` now searches name and domain (it was ignored).
+
+  **Database migrations:** `owner_deactivated` (boolean) and `avatar_url` on `publishers` — run `prisma migrate deploy` when updating.
+
+  See [Content Pod Publishers](/features/content-pod-publishers) and [Publisher Self-Service](/features/publisher-self-service).
+</Update>
 <Update label="2026-05-11" description="v1.3.0" tags={["docs"]}>
   ## Gateway Developer Guide
 

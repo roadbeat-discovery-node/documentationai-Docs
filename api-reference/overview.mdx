@@ -51,8 +51,8 @@ The API uses two types of API key authentication depending on the operation:
 
 | Header | Purpose | Required for |
 |--------|---------|-------------|
-| `X-Publisher-Key` | Publisher API key (issued at registration) | Teaser ingest (publish, update, delete, batch) |
-| `X-Admin-Key` | Admin API key (set via `ADMIN_API_KEY` env var) | Admin, publisher management (update, suspend, rotate-key), node management |
+| `X-Publisher-Key` | Publisher API key (issued at registration) | Teaser ingest (publish, update, delete, batch), publisher self-service (`/publishers/me…`) |
+| `X-Admin-Key` | Admin API key (set via `ADMIN_API_KEY` env var) | Admin, publisher management (update, contact, suspend, rotate-key), node management |
 
 <Callout kind="info">
   Search, suggestions, health, statistics, and the public node directory do **not** require authentication. They are open endpoints available to any client.
@@ -62,15 +62,15 @@ The API uses two types of API key authentication depending on the operation:
 
 <Columns cols={3}>
   <Card title="Search" icon="search" href="/features/search">
-    3 endpoints — content search, goal-based search, autocomplete suggestions. Open access.
+    4 endpoints — content search, goal-based search, batched goal search, autocomplete suggestions. Open access.
   </Card>
 
   <Card title="Teasers" icon="upload" href="/features/ingest">
-    5 endpoints — publish, update, delete, get, batch. Requires publisher key.
+    6 endpoints — publish, update, delete, get, batch (publisher key), public lookup by content type + slug.
   </Card>
 
   <Card title="Publishers" icon="building" href="/features/publishers">
-    8 endpoints — register, list, get, update, rotate key, verify domain, suspend, stats.
+    17 endpoints — register, list, get, contact, update, rotate key, verify domain / pod, pod sync, suspend, stats, and 6 self-service endpoints.
   </Card>
 </Columns>
 
@@ -136,7 +136,7 @@ All errors follow a consistent format:
 | `201` | Created |
 | `400` | Bad Request — validation failed or malformed input |
 | `401` | Unauthorized — missing or invalid API key |
-| `403` | Forbidden — publisher not authorized for this action |
+| `403` | Forbidden — publisher not authorized for this action, or deactivated by its owner |
 | `404` | Not Found — resource does not exist |
 | `409` | Conflict — duplicate resource (e.g. domain already registered) |
 | `429` | Too Many Requests — rate limit exceeded |
@@ -148,7 +148,7 @@ The API enforces rate limits at two levels:
 
 ### Global rate limit
 
-**120 requests per minute per IP address** across all endpoints, enforced by @nestjs/throttler.
+**120 requests per minute per client IP address** across all endpoints, enforced by @nestjs/throttler. Behind a reverse proxy, the client address is taken from `X-Forwarded-For` across the number of trusted hops set by [`TRUST_PROXY`](/deployment/configuration#reverse-proxy-and-client-ip) (default: one proxy) — so every client has its own bucket, and clients cannot pick a bucket by sending their own header.
 
 When exceeded, the API returns:
 

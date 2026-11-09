@@ -146,14 +146,24 @@ Stores registered publisher accounts with verification status and hashed API key
 | `name` | VARCHAR(200) | Display name |
 | `type` | VARCHAR(50) | newspaper, magazine, blog, organization, etc. |
 | `domain` | VARCHAR(200) UNIQUE | Publisher domain for verification |
-| `public_key` | TEXT | Ed25519 public key (base64) |
+| `public_key` | TEXT | Ed25519 public key (PEM) |
+| `contact_email` | VARCHAR(200) | Contact e-mail — **private**, admin endpoint only |
+| `contact_name` | VARCHAR(200) | Contact person — **private**, admin endpoint only |
+| `avatar_url` | VARCHAR(500) | Optional picture, set by the owner (Content Pod publishers: a file inside their pod) |
+| `description` | JSONB | Optional "About" text per language, e.g. `{ "en": "...", "de": "..." }` |
 | `content_types` | TEXT[] | Allowed content types |
-| `verification_status` | VARCHAR(30) | unverified, domain_verified, organization_verified, trusted |
+| `verification_status` | VARCHAR(30) | unverified, pod_verified, domain_verified, organization_verified, trusted_publisher, suspended |
 | `trust_level` | VARCHAR(20) | new, established, trusted, suspended |
 | `rate_limits` | JSONB | `{ teasers_per_day, requests_per_minute }` |
 | `api_key_hash` | VARCHAR(128) | SHA-256 hash of the publisher's API key |
+| `federation_opt_out` | BOOLEAN | Exclude the publisher's teasers from Topic Relay announcements |
+| `owner_deactivated` | BOOLEAN | Switched off by its owner — no ingest, teasers hidden (default `false`) |
 | `document_count` | INT | Teaser count |
 | `is_active` | BOOLEAN | Active status |
+
+<Callout kind="info">
+  Public API responses expose only an allowlist of these columns — `contact_email`, `contact_name` and `api_key_hash` are never public. See [Public publisher record](/features/publishers#public-publisher-record).
+</Callout>
 
 ### Node config
 
