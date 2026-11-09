@@ -226,7 +226,7 @@ curl http://localhost:3300/api/v1/publishers/{id}/contact \
 
 A publisher is **switched off** when its owner deactivated it ([self-service](/features/publisher-self-service#switch-the-publisher-off-and-on) or [pod sync](/features/content-pod-publishers#pod-sync)) or an admin suspended it. The content of switched-off publishers is offline everywhere:
 
-- content search (`/search`), batched goal search (`/search/by-goals`) and suggestions,
+- content search (`/search`), goal search (`/search/by-goal`, `/search/by-goals`) and suggestions,
 - teaser lookups by ID and by content type + slug,
 - similar content ("more like this").
 
