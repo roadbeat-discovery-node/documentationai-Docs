@@ -87,6 +87,17 @@ Type-specific facets include additional metadata fields in the response to help 
 | `labels` | object | Multilingual labels from the schema (e.g., `{ "en": "Event Type", "de": "Veranstaltungstyp" }`) |
 | `priority` | number | Display priority — lower values appear higher in the sidebar |
 
+### Value labels
+
+The buckets of a type-specific facet carry a `label` from the content type's English translations in the Schema Registry (`<type>-i18n-en.json`). The Discovery Node looks for the label group in this order and uses the first one that labels any of the facet's values:
+
+1. `x-filter.i18n_key` — the schema names the group explicitly (needed when the property name is generic, e.g. `activity.type` in check-in, whose labels are under `activity_type`)
+2. the facet's `filter_key`
+3. the property path (`location.type`)
+4. the property name (`type`)
+
+A value without a label keeps its code as `label`. Frontends translate labels into the user's language themselves (the Web Client does this with the registry's translations).
+
 ## Facet response format
 
 Facets are returned in the `aggregations` array of every search response:

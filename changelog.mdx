@@ -2,6 +2,15 @@
 title: Changelog
 description: Release notes and version history for the roadbeat Discovery Node.
 ---
+<Update label="2026-11-11" description="v1.5.2" tags={["bugfix"]}>
+  ## Facet values with the right labels
+
+  - Type-specific facets take their bucket labels from the label group named by the new optional **`x-filter.i18n_key`**, then the `filter_key`, the property path and the property name — the first group that labels any of the facet's values. Before, only the filter key and the property name were tried, so facets on generic property names showed raw codes or the labels of another list: check-in *activity* showed event types, freelance-gig *location type* showed licences, podcast *content type* showed the type's own name.
+  - The Schema Registry names the group (`i18n_key`) for the eleven facets that needed it. Measured against all registry schemas: **121 of 121** enum facets fully labelled (before: 98 of 115).
+
+  See [Value labels](/features/facets#value-labels).
+</Update>
+
 <Update label="2026-11-09" description="v1.5.1" tags={["security","bugfix"]}>
   ## Privacy, rate limiting and "more like this"
 
