@@ -250,7 +250,13 @@ paths:
       description: >-
         Registers a new publisher with the discovery node. Returns the publisher
         record and a one-time API key. Optionally verifies domain ownership via
-        DNS TXT record.
+        DNS TXT record. By default the node generates the publisher id; with
+        `publisher_id` and `proof` the publisher is registered under an id of
+        its own choice (a Studio uses the organization id, which its teasers
+        carry as `identifier.publisher_id`). The proof is the base64 Ed25519
+        signature of `roadbeat-publisher-register:<publisher_id>:<timestamp>`
+        made with the private key of `public_key`; `timestamp` (ISO 8601) must
+        be within 5 minutes of the node's clock.
       parameters: []
       requestBody:
         required: true
@@ -260,7 +266,29 @@ paths:
               $ref: '#/components/schemas/RegisterPublisherDto'
       responses:
         '201':
-          description: ''
+          description: >-
+            Publisher registered — the record in its owner view and the API key,
+            returned only once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterPublisherResponseDto'
+        '400':
+          description: >-
+            Validation failed — e.g. `studio_node_url` without a top-level domain
+            outside development/test, or `publisher_id` given and `proof`
+            missing, not made with the private key of `public_key`, or more
+            than 5 minutes off
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
+        '409':
+          description: A publisher with this `publisher_id` or this `domain` is already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseDto'
       tags:
         - publishers
   /api/v1/publishers/me/public-key:
@@ -268,7 +296,7 @@ paths:
       operationId: PublishersController_updateOwnPublicKey
       summary: Replace the own Ed25519 public key
       description: >-
-        Replaces the publisherâ€™s Ed25519 public key. The request must prove
+        Replaces the publisher’s Ed25519 public key. The request must prove
         possession of the NEW key: `signature` is the base64 Ed25519 signature
         of `roadbeat-key-rotation:<publisherId>:<timestamp>` made with the new
         key, and `timestamp` (ISO 8601) is at most 5 minutes old. Reachable
@@ -276,7 +304,7 @@ paths:
       parameters:
         - name: X-Publisher-Key
           in: header
-          description: Publisher API key (`rb_pub_â€¦`) of the calling publisher
+          description: Publisher API key (`rb_pub_…`) of the calling publisher
           required: true
           schema:
             type: string
@@ -319,7 +347,7 @@ paths:
       parameters:
         - name: X-Publisher-Key
           in: header
-          description: Publisher API key (`rb_pub_â€¦`) of the calling publisher
+          description: Publisher API key (`rb_pub_…`) of the calling publisher
           required: true
           schema:
             type: string
@@ -354,7 +382,7 @@ paths:
       parameters:
         - name: X-Publisher-Key
           in: header
-          description: Publisher API key (`rb_pub_â€¦`) of the calling publisher
+          description: Publisher API key (`rb_pub_…`) of the calling publisher
           required: true
           schema:
             type: string
@@ -403,7 +431,7 @@ paths:
       parameters:
         - name: X-Publisher-Key
           in: header
-          description: Publisher API key (`rb_pub_â€¦`) of the calling publisher
+          description: Publisher API key (`rb_pub_…`) of the calling publisher
           required: true
           schema:
             type: string
@@ -416,7 +444,7 @@ paths:
                 $ref: '#/components/schemas/OwnPublisherDto'
         '400':
           description: >-
-            The URL is not a file inside the publisherâ€™s own verified Content
+            The URL is not a file inside the publisher’s own verified Content
             Pod
           content:
             application/json:
@@ -449,13 +477,13 @@ paths:
       parameters:
         - name: X-Publisher-Key
           in: header
-          description: Publisher API key (`rb_pub_â€¦`) of the calling publisher
+          description: Publisher API key (`rb_pub_…`) of the calling publisher
           required: true
           schema:
             type: string
       responses:
         '201':
-          description: Publisher deactivated â€” updated record (owner view)
+          description: Publisher deactivated — updated record (owner view)
           content:
             application/json:
               schema:
@@ -486,13 +514,13 @@ paths:
       parameters:
         - name: X-Publisher-Key
           in: header
-          description: Publisher API key (`rb_pub_â€¦`) of the calling publisher
+          description: Publisher API key (`rb_pub_…`) of the calling publisher
           required: true
           schema:
             type: string
       responses:
         '201':
-          description: Publisher reactivated â€” updated record (owner view)
+          description: Publisher reactivated — updated record (owner view)
           content:
             application/json:
               schema:
@@ -511,17 +539,17 @@ paths:
   /api/v1/publishers/{id}/pod-sync:
     post:
       operationId: PublishersController_podSync
-      summary: Apply the state the publisherâ€™s Content Pod declares
+      summary: Apply the state the publisher’s Content Pod declares
       description: >-
-        Reads `/.well-known/roadbeat-publisher.json` on the publisherâ€™s
+        Reads `/.well-known/roadbeat-publisher.json` on the publisher’s
         Content Pod (configured pod hosts only) and applies it: `status:
         "suspended"` or `"deactivated"` deactivates the publisher, any other
         status reactivates it, and `status: "deleted"` removes the publisher
         together with all its teasers (account purge). A new `publicKey` in the
         document is taken over only with `{ timestamp, signature }` proving
         possession of that key; a new API key is then returned once (key
-        rotation after losing the device). No API key needed â€” the pod
-        document is the ownerâ€™s authority.
+        rotation after losing the device). No API key needed — the pod
+        document is the owner’s authority.
       parameters:
         - name: id
           required: true
@@ -1696,6 +1724,26 @@ components:
       required:
         - name
         - email
+    RegistrationProofDto:
+      type: object
+      description: >-
+        Proof of possession of `public_key` for a registration under a chosen
+        id: the base64 Ed25519 signature of
+        `roadbeat-publisher-register:<publisher_id>:<timestamp>`, made with the
+        private key of `public_key`. The timestamp must be within 5 minutes of
+        the node's clock.
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-11-19T12:00:00.000Z'
+        signature:
+          type: string
+          description: Base64-encoded Ed25519 signature
+          example: q3JkZ2Vu…
+      required:
+        - timestamp
+        - signature
     RegisterPublisherDto:
       type: object
       properties:
@@ -1719,7 +1767,10 @@ components:
           example: energynews.de
         studio_node_url:
           type: string
-          description: Studio node URL for callback communication
+          description: >-
+            Studio node URL for callback communication. Must have a top-level
+            domain, except when the node runs with NODE_ENV development or test
+            (e.g. `http://localhost:3030`).
           example: https://studio.energynews.de
         public_key:
           type: string
@@ -1742,6 +1793,20 @@ components:
             DNS TXT record verification token (set _roadbeat.example.com TXT
             "roadbeat-verify=TOKEN")
           example: abc123-verification-token
+        publisher_id:
+          type: string
+          format: uuid
+          description: >-
+            Register under this id instead of a generated one — a Studio uses
+            the organization id, which its teasers carry as
+            `identifier.publisher_id`. Requires `proof`.
+          example: 0b5f2c1e-8d4a-4c6b-9e2f-1a3b5c7d9e0f
+        proof:
+          description: >-
+            Proof of possession of `public_key` for `publisher_id`. Required
+            when `publisher_id` is set, ignored otherwise.
+          allOf:
+            - $ref: '#/components/schemas/RegistrationProofDto'
       required:
         - name
         - type
@@ -1880,6 +1945,9 @@ components:
           type: string
         studio_node_url:
           type: string
+          description: >-
+            Must have a top-level domain, except when the node runs with
+            NODE_ENV development or test (e.g. `http://localhost:3030`).
         public_key:
           type: string
         content_types:
@@ -1967,6 +2035,18 @@ components:
         contactEmail:
           type: string
           example: tech@energynews.de
+    RegisterPublisherResponseDto:
+      type: object
+      properties:
+        publisher:
+          $ref: '#/components/schemas/OwnPublisherDto'
+        api_key:
+          type: string
+          description: Publisher API key — returned ONCE; only its SHA-256 hash is stored
+          example: rb_pub_4f9c…
+      required:
+        - publisher
+        - api_key
     PublisherIdentityDto:
       type: object
       properties:
@@ -1997,7 +2077,7 @@ components:
         signature:
           type: string
           description: Base64-encoded Ed25519 signature
-          example: q3JkZ2Vuâ€¦
+          example: q3JkZ2Vu…
     UpdateOwnPublicKeyDto:
       type: object
       allOf:
@@ -2008,7 +2088,7 @@ components:
           description: New PEM-encoded Ed25519 public key (SPKI)
           example: |-
             -----BEGIN PUBLIC KEY-----
-            MCowBQYDK2VwAyEAâ€¦
+            MCowBQYDK2VwAyEA…
             -----END PUBLIC KEY-----
       required:
         - public_key
@@ -2038,7 +2118,7 @@ components:
           nullable: true
           maxLength: 500
           description: >-
-            URL of a file inside the publisherâ€™s own verified Content Pod
+            URL of a file inside the publisher’s own verified Content Pod
             (`pod_verified` publishers only). `null` or an empty string removes
             the picture.
           example: https://jane.pods.roadbeat.net/assets/avatar.webp
@@ -2064,7 +2144,7 @@ components:
             - deactivated
             - deleted
           description: >-
-            State applied from the podâ€™s well-known document. `deleted`: the
+            State applied from the pod’s well-known document. `deleted`: the
             publisher and all its teasers were removed.
         key_rotated:
           type: boolean
@@ -2072,9 +2152,9 @@ components:
         api_key:
           type: string
           description: >-
-            New publisher API key â€” returned ONCE, only when `key_rotated` is
+            New publisher API key — returned ONCE, only when `key_rotated` is
             true. The old key stops working.
-          example: rb_pub_4f9câ€¦
+          example: rb_pub_4f9c…
         reason:
           type: string
           description: >-

@@ -98,6 +98,26 @@ The buckets of a type-specific facet carry a `label` from the content type's Eng
 
 A value without a label keeps its code as `label`. Frontends translate labels into the user's language themselves (the Web Client does this with the registry's translations).
 
+### Schema Registry availability
+
+Type-specific facets are built from the Schema Registry (configured with [`SCHEMA_REGISTRY_URL`](/deployment/configuration#schema-registry)), but searches do not depend on the registry answering in time. The node keeps the last good facet definitions per content type and refreshes them in the background:
+
+| Situation | What the node does |
+|-----------|--------------------|
+| Definitions are younger than 10 minutes | Uses them without asking the registry |
+| Definitions are older | Answers with them at once and refreshes them in the background (stale-while-revalidate) |
+| The registry fails or times out | Keeps using the last good definitions; the next attempt for that content type waits 30 seconds |
+| The node restarts during a registry outage | Reads the last good definitions from Redis, where they are kept for 7 days |
+| A content type the node has never seen | Waits for the registry (up to 5 s for the schema, 3 s for the labels). If that fails, the response has no type-specific facets until a later attempt succeeds. |
+
+- Only **one registry call per content type** runs at a time, however many searches arrive.
+- If the schema loads but its English labels do not, the node keeps the labelled definitions it already has. For a content type it has never seen, it uses the definitions without bucket labels (buckets show their codes) and tries again after 30 seconds — such definitions are never stored as the last good ones. A content type without a label file (HTTP `404`) is complete without labels.
+- Failures are logged per content type, for example `Schema Registry failed for "event" (…); keeping the last known facet definitions (42 min old), retrying in 30 s`, or `… no facet definitions known, retrying in 30 s` when nothing is known yet.
+
+<Callout kind="tip">
+  Global facets (categories, publishers, languages, …) never depend on the Schema Registry. Only the type-specific facets of single-content-type searches do.
+</Callout>
+
 ## Facet response format
 
 Facets are returned in the `aggregations` array of every search response:

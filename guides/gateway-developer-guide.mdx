@@ -166,7 +166,7 @@ curl -X POST https://discovery-node.example.com/api/v1/publishers/register \
 
 ### Registering with multiple Discovery Nodes
 
-You can register with multiple Discovery Nodes to reach different audiences or regions. Each node gives you a separate API key and publisher ID:
+You can register with multiple Discovery Nodes to reach different audiences or regions. Each node gives you a separate API key — and, unless you choose it yourself, a separate publisher ID:
 
 ```javascript
 const NODES = [
@@ -185,6 +185,38 @@ for (const node of NODES) {
   // Store each node's API key and publisher ID separately
 }
 ```
+
+#### Use one publisher ID on every node
+
+Every teaser carries `identifier.publisher_id`, and a node accepts it only if that id is **its** id for you. With generated ids, you would have to build and sign a different teaser per node. Instead, register under an id of your own choice on every node: send a UUID as `publisher_id` plus a `proof` that you hold the private key of your `public_key`.
+
+```javascript
+const { sign, createPrivateKey } = require('crypto');
+
+const PUBLISHER_ID = '0b5f2c1e-8d4a-4c6b-9e2f-1a3b5c7d9e0f'; // generate once, keep forever
+const privateKey = createPrivateKey(process.env.ROADBEAT_PRIVATE_KEY);
+
+for (const node of NODES) {
+  // A fresh proof per request: the timestamp must be within 5 minutes of the node's clock
+  const timestamp = new Date().toISOString();
+  const message = `roadbeat-publisher-register:${PUBLISHER_ID}:${timestamp}`;
+  const signature = sign(null, Buffer.from(message, 'utf-8'), privateKey).toString('base64');
+
+  const response = await fetch(`${node.url}/api/v1/publishers/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...registrationPayload,
+      publisher_id: PUBLISHER_ID,
+      proof: { timestamp, signature },
+    }),
+  });
+  const data = await response.json(); // data.publisher.id === PUBLISHER_ID
+  // Still store each node's API key separately
+}
+```
+
+A taken id returns `409`; an invalid or stale proof returns `400`. Details: [Register under a chosen id](/features/publishers#register-under-a-chosen-id).
 
 ## Step 3: Verify your domain
 

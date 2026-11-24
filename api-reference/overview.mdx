@@ -138,7 +138,7 @@ All errors follow a consistent format:
 | `401` | Unauthorized — missing or invalid API key |
 | `403` | Forbidden — publisher not authorized for this action, or deactivated by its owner |
 | `404` | Not Found — resource does not exist |
-| `409` | Conflict — duplicate resource (e.g. domain already registered) |
+| `409` | Conflict — duplicate resource (e.g. domain or publisher id already registered) |
 | `429` | Too Many Requests — rate limit exceeded |
 | `500` | Internal Server Error |
 
@@ -149,6 +149,8 @@ The API enforces rate limits at two levels:
 ### Global rate limit
 
 **120 requests per minute per client IP address** across all endpoints, enforced by @nestjs/throttler. Behind a reverse proxy, the client address is taken from `X-Forwarded-For` across the number of trusted hops set by [`TRUST_PROXY`](/deployment/configuration#reverse-proxy-and-client-ip) (default: one proxy) — so every client has its own bucket, and clients cannot pick a bucket by sending their own header.
+
+The node operator can exempt their own servers (for example a portal that queries the node server-side) with [`THROTTLE_SKIP_IPS`](/deployment/configuration#exempting-your-own-servers-from-the-rate-limit). The exemption is matched against the same derived client address, so it cannot be claimed with a forged header.
 
 When exceeded, the API returns:
 

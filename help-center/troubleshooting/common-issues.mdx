@@ -122,6 +122,50 @@ description: Solutions for frequent errors and problems when working with the Di
   <Expandable title="Clients can bypass the rate limit with X-Forwarded-For">
     This happens when `TRUST_PROXY=true` (every hop trusted) or when the API port is reachable without the proxy while `TRUST_PROXY=1`. Use a hop count instead of `true`, and firewall port `3300` (or bind it to `127.0.0.1`) — or set `TRUST_PROXY=false` if clients use the port directly.
   </Expandable>
+
+  <Expandable title="429 for your own server (portal, front-end) that calls the node">
+    A server that queries the node on behalf of many users sends everything from one address and hits the global limit of 120 requests/min. Add its address — as the node sees it, after `TRUST_PROXY` — to `THROTTLE_SKIP_IPS` and restart the API:
+
+    ```bash
+    THROTTLE_SKIP_IPS=10.0.0.2,10.0.0.3
+    ```
+
+    Check the startup log line `rate limit exempt: …`. See [Exempting your own servers](/deployment/configuration#exempting-your-own-servers-from-the-rate-limit).
+  </Expandable>
+
+  <Expandable title="Nobody gets 429 any more">
+    `THROTTLE_SKIP_IPS` probably contains the address every request arrives with — typically a TCP load balancer without the PROXY protocol, or a subnet that includes it. Remove that entry: only list your own servers' addresses.
+  </Expandable>
+
+  <Expandable title="API does not start: THROTTLE_SKIP_IPS … is not an IP address or CIDR subnet">
+    Every comma-separated entry must be an IPv4 or IPv6 address, optionally with a prefix length (`10.0.0.0/24`, `fd00::/8`). Host names and ranges like `10.0.0.1-10.0.0.9` are not accepted. Fix or remove the entry named in the error.
+  </Expandable>
+</ExpandableGroup>
+
+## Registration errors
+
+<ExpandableGroup>
+  <Expandable title="400 — proof must be a fresh signature of the registration message">
+    You registered with `publisher_id`, and the `proof` was not accepted. Check that:
+    - the signed message is exactly `roadbeat-publisher-register:<publisher_id>:<timestamp>` — same id, same timestamp string as in `proof.timestamp`,
+    - it was signed with the private key that belongs to the `public_key` in the same request,
+    - the timestamp is within 5 minutes of the node's clock (check the clock of the signing machine),
+    - the signature is base64-encoded.
+
+    See [Register under a chosen id](/features/publishers#register-under-a-chosen-id).
+  </Expandable>
+
+  <Expandable title="409 — Publisher … already registered">
+    A publisher with the `publisher_id` you chose already exists on this node — for example because the organization was registered earlier (perhaps by hand by the node operator). Use the API key you got then, or ask the node operator to [rotate it](/features/publishers#key-rotation-admin). A `409` naming the **domain** means another publisher already uses that `domain`.
+  </Expandable>
+
+  <Expandable title="400 — property publisher_id should not exist">
+    The node runs a version older than v1.6.0 and does not know registration under a chosen id. Update the node, or register without `publisher_id` and `proof`.
+  </Expandable>
+
+  <Expandable title="400 — studio_node_url must be a URL address">
+    `studio_node_url` must be a public URL with a top-level domain. A local Studio such as `http://localhost:3030` is only accepted when the node runs with `NODE_ENV=development` or `test`.
+  </Expandable>
 </ExpandableGroup>
 
 ## Publishing errors
@@ -189,6 +233,20 @@ description: Solutions for frequent errors and problems when working with the Di
     The publisher is probably **switched off** — deactivated by its owner (`ownerDeactivated: true` in `GET /api/v1/publishers/:id`) or suspended by an admin (`verificationStatus: "suspended"`). Its teasers stay in the index but are hidden from search, suggestions, lookups and "more like this" until it is reactivated. See [Switched-off publishers](/features/publishers#switched-off-publishers).
 
     Also check whether the client sends the publisher in `filters["publisher.id_exclude"]` (muted publisher).
+  </Expandable>
+
+  <Expandable title="Type-specific facets are missing from search responses">
+    Type-specific facets are only added when the search targets **one** content type. If they are still missing, the node has no facet definitions for that type — it could not reach the Schema Registry and has never loaded the type before (neither in memory nor in Redis). Check:
+
+    1. `SCHEMA_REGISTRY_URL` points to a registry the node can reach (default `http://localhost:3200`).
+    2. The API log for `Schema Registry failed for "<type>" (…); no facet definitions known, retrying in 30 s`.
+    3. The content type exists in the registry and has `x-filter` annotations.
+
+    Once the registry answers, the facets return with the next search after the 30-second retry pause. Types the node has loaded before keep their facets during an outage — see [Schema Registry availability](/features/facets#schema-registry-availability).
+  </Expandable>
+
+  <Expandable title="Type-specific facet buckets show codes instead of labels">
+    Either the value has no label in the type's English translations (see [Value labels](/features/facets#value-labels)), or the node loaded the schema while the registry's label file was unavailable. In the second case the node retries after 30 seconds and switches to the labelled definitions as soon as the labels load.
   </Expandable>
 
   <Expandable title="'More like this' reports method: more_like_this">

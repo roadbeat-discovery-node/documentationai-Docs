@@ -10,6 +10,12 @@ description: Frequently asked questions about publisher registration, verificati
     See the [Publisher Management](/features/publishers) page for the full registration flow with examples.
   </Expandable>
 
+  <Expandable title="Can I choose my own publisher id?">
+    Yes. Send a UUID as `publisher_id` together with a `proof`: the base64 Ed25519 signature of `roadbeat-publisher-register:<publisher_id>:<timestamp>`, made with the private key of the `public_key` you register, and at most 5 minutes old. This lets you use the **same publisher id on every node** — your teasers carry one `identifier.publisher_id` everywhere. A Studio does this for each of its organizations when you click *Connect* under *Settings → Discovery Nodes*.
+
+    If the id is already taken, the node answers `409`. See [Register under a chosen id](/features/publishers#register-under-a-chosen-id).
+  </Expandable>
+
   <Expandable title="I lost my API key. How do I get a new one?">
     API keys cannot be retrieved after registration because they are stored as SHA-256 hashes. An administrator must rotate your key:
 

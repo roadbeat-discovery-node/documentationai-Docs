@@ -94,6 +94,7 @@ The NestJS API is organized into 16 modules, each handling a distinct responsibi
     - Suggestion cache (60-second TTL)
     - Node directory cache (5-minute TTL)
     - Embedding vector cache for queries (1-hour TTL)
+    - Last good facet definitions per content type (7-day TTL — keeps [type-specific facets](/features/facets#schema-registry-availability) across restarts during a Schema Registry outage)
     - Per-publisher rate limit counters (sliding window)
 
     **Port**: 6379

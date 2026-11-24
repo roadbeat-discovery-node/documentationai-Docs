@@ -73,6 +73,12 @@ graph TD
     NODE_ENV=production
     # One reverse proxy (Caddy): client IP for rate limiting from X-Forwarded-For
     TRUST_PROXY=1
+    # Own servers calling the node over the private network, exempt from the
+    # global rate limit (IPs/CIDRs). Never a load balancer's address.
+    THROTTLE_SKIP_IPS=
+
+    # Schema Registry for type-specific facets
+    SCHEMA_REGISTRY_URL=https://schema-registry.yourdomain.com
 
     # Content Pod verification (publishers without an own domain)
     POD_VERIFY_HOSTS=.pods.roadbeat.net

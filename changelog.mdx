@@ -2,6 +2,48 @@
 title: Changelog
 description: Release notes and version history for the roadbeat Discovery Node.
 ---
+<Update label="2026-11-24" description="v1.7.1" tags={["bugfix"]}>
+  ## Facets survive a Schema Registry outage
+
+  When the Schema Registry did not answer, searches silently lost their type-specific facets (a portal's filter column went empty), and every uncached search waited up to 8 s for the registry again. Now:
+
+  - **Stale-while-revalidate** — facet definitions younger than 10 minutes are used as they are; older ones are answered at once while a refresh runs in the background.
+  - **Last good definitions** — when a refresh fails, the node keeps the definitions it has and waits **30 s** before asking the registry about that content type again. The last good definitions are stored in Redis for **7 days**, so a restart during an outage keeps the facets.
+  - **One registry call per content type** at a time, however many searches arrive.
+  - **Labels are not lost** — if only the English labels fail to load, the labelled definitions in use are kept. A content type without a label file (`404`) still counts as complete.
+  - Content type names are URL-encoded in registry calls.
+
+  New in the docs: the `SCHEMA_REGISTRY_URL` variable. See [Schema Registry availability](/features/facets#schema-registry-availability) and [Configuration](/deployment/configuration#schema-registry).
+</Update>
+
+<Update label="2026-11-23" description="v1.7.0" tags={["feature","bugfix"]}>
+  ## Rate-limit exemption for your own servers, local Studio URLs
+
+  **`THROTTLE_SKIP_IPS`**
+
+  - New variable: comma-separated IP addresses or CIDR subnets (IPv4/IPv6) that the per-address rate limit (120 requests/min) lets through — meant for your own servers that query the node on behalf of many users, e.g. over a private network.
+  - Matched against the client address derived under `TRUST_PROXY`, so a forged `X-Forwarded-For` cannot claim an exemption. Per-publisher ingest limits still apply.
+  - Empty by default. The active list is logged at startup (`rate limit exempt: …`); an invalid entry stops the API.
+  - **Never list a load balancer's address** — with a TCP load balancer without the PROXY protocol, every public client arrives with that address.
+
+  **Fix: local Studio URL in development and test**
+
+  - With `NODE_ENV=development` or `test`, `studio_node_url` (registration and `PUT /api/v1/publishers/:id`) accepts hosts without a top-level domain such as `http://localhost:3030`, so a local Studio can connect to a local node from its own settings. Production still requires a public URL.
+
+  See [Exempting your own servers](/deployment/configuration#exempting-your-own-servers-from-the-rate-limit).
+</Update>
+
+<Update label="2026-11-19" description="v1.6.0" tags={["feature"]}>
+  ## Register under a chosen publisher id
+
+  - `POST /api/v1/publishers/register` accepts an optional **`publisher_id`** (UUID) together with a **`proof`** `{ timestamp, signature }`: the base64 Ed25519 signature of `roadbeat-publisher-register:<publisher_id>:<timestamp>`, made with the private key of the submitted `public_key` and at most 5 minutes old.
+  - Lets a **Studio** register each of its organizations under the organization's id — the id its teasers carry as `identifier.publisher_id` — instead of having the node operator create such publishers by hand. Gateways can use it to keep **one publisher id on every node**.
+  - An invalid or stale proof returns `400`; a taken id returns `409`. The message differs from the key-rotation proof, so neither proof can be replayed as the other.
+  - Without `publisher_id`, nothing changes.
+
+  See [Register under a chosen id](/features/publishers#register-under-a-chosen-id) and the [Gateway Developer Guide](/guides/gateway-developer-guide#use-one-publisher-id-on-every-node).
+</Update>
+
 <Update label="2026-11-11" description="v1.5.2" tags={["bugfix"]}>
   ## Facet values with the right labels
 

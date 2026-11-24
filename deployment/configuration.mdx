@@ -30,8 +30,9 @@ These must be set for the API to start:
 |----------|---------|-------------|
 | `ADMIN_API_KEY` | — | Admin API key for protected endpoints. If unset, admin endpoints return 401. |
 | `CORS_ORIGIN` | `*` | Allowed CORS origins. Comma-separated for multiple (e.g. `https://app.roadbeat.net,https://admin.roadbeat.net`) |
-| `NODE_ENV` | `development` | Set to `production` to enable CSP headers and stricter security |
+| `NODE_ENV` | `development` | Set to `production` to enable CSP headers and stricter security. With `development` or `test`, a publisher's `studio_node_url` may be a host without a top-level domain (e.g. `http://localhost:3030`) so a local Studio can connect. |
 | `TRUST_PROXY` | `1` | Reverse proxies in front of the API — see [Reverse proxy and client IP](#reverse-proxy-and-client-ip) |
+| `THROTTLE_SKIP_IPS` | *(empty)* | Your own servers that the global rate limit lets through — see [Exempting your own servers](#exempting-your-own-servers-from-the-rate-limit) |
 
 <Callout kind="alert">
   In production, always set `ADMIN_API_KEY` to a strong random value and restrict `CORS_ORIGIN` to your domain(s). Never use wildcard CORS in production.
@@ -54,6 +55,32 @@ The effective setting is logged at startup (`trust proxy: 1`). An invalid addres
 <Callout kind="alert">
   With `TRUST_PROXY=1`, the API port (3300) must only be reachable through the proxy. If the port is published directly, firewall it or bind it to `127.0.0.1` — or set `TRUST_PROXY=false` if clients really use it directly.
 </Callout>
+
+## Exempting your own servers from the rate limit
+
+Servers you run yourself — for example a portal or front-end that queries the node server-side over a private network — send all their users' requests from one address and would quickly hit the global limit of 120 requests/minute. List them in `THROTTLE_SKIP_IPS` to let them through unthrottled:
+
+```bash
+# Comma-separated IPv4/IPv6 addresses or CIDR subnets
+THROTTLE_SKIP_IPS=10.0.0.2,10.0.0.3,172.16.0.0/12
+```
+
+- Entries are matched against the client address the node derives under [`TRUST_PROXY`](#reverse-proxy-and-client-ip) — so a client cannot claim an exemption with a forged `X-Forwarded-For` header.
+- Empty or unset (the default): nobody is exempt.
+- The active list is logged at startup (`rate limit exempt: 10.0.0.2, 10.0.0.3, 172.16.0.0/12` or `rate limit exempt: none`). An invalid entry stops the API at startup.
+- Only the per-address limits are skipped (the global limit and the website API's). [Per-publisher limits](/features/publishers#verification-levels) on ingest still apply.
+
+<Callout kind="danger">
+  **Never list the address of a load balancer.** A load balancer that forwards plain TCP without the PROXY protocol (for example a Hetzner Cloud Load Balancer in TCP mode) makes every public client reach the node with the balancer's private address. Exempting that address switches the rate limit off for everyone.
+</Callout>
+
+## Schema Registry
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SCHEMA_REGISTRY_URL` | `http://localhost:3200` | Schema Registry the node reads content type metadata schemas and their English labels from, to build [type-specific facets](/features/facets#content-type-specific-facets-schema-driven) |
+
+The node keeps the last good facet definitions per content type, so a Schema Registry outage does not remove facets from search responses — see [Schema Registry availability](/features/facets#schema-registry-availability).
 
 ## Content Pod verification
 
@@ -82,7 +109,7 @@ Only these hosts are ever contacted for [pod verification and pod sync](/feature
 
 Global rate limiting is configured in the application module:
 
-- **Global limit**: 120 requests/minute per client IP (via @nestjs/throttler; the client IP follows [`TRUST_PROXY`](#reverse-proxy-and-client-ip))
+- **Global limit**: 120 requests/minute per client IP (via @nestjs/throttler; the client IP follows [`TRUST_PROXY`](#reverse-proxy-and-client-ip)); addresses in [`THROTTLE_SKIP_IPS`](#exempting-your-own-servers-from-the-rate-limit) are exempt
 - **Website API**: 120 requests/minute per IP (separate throttle)
 - **Per-publisher limits**: Configured per verification level (stored in the `rate_limits` JSONB column)
 
@@ -92,7 +119,7 @@ The API performs environment validation at startup:
 
 <Steps>
   <Step title="Critical checks">
-    `DATABASE_URL` must be set. Missing this variable causes an immediate exit with error code 1.
+    `DATABASE_URL` must be set. Missing this variable causes an immediate exit with error code 1. An invalid `TRUST_PROXY` or `THROTTLE_SKIP_IPS` entry also stops the API at startup.
   </Step>
   <Step title="Security warnings">
     Warnings are logged for:
@@ -124,6 +151,11 @@ ADMIN_API_KEY="your-strong-random-admin-key"
 CORS_ORIGIN="http://localhost:3301"
 NODE_ENV=development
 TRUST_PROXY=1
+# Own servers exempt from the global rate limit (never a load balancer's address)
+THROTTLE_SKIP_IPS=
+
+# Schema Registry (type-specific facets)
+SCHEMA_REGISTRY_URL="http://localhost:3200"
 
 # Content Pod verification
 POD_VERIFY_HOSTS=".pods.roadbeat.net"

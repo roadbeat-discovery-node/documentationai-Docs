@@ -60,6 +60,10 @@ The response includes the publisher record (owner view, including your contact d
   The `api_key` is shown **only once** at registration. Store it in a secure location. If lost, an admin can rotate the key.
 </Callout>
 
+<Callout kind="info">
+  `studio_node_url` must be a public URL with a top-level domain. With `NODE_ENV=development` or `test`, the node also accepts hosts without one — such as `http://localhost:3030` — so a local Studio can connect to a local node. The same rule applies when an admin updates the URL with `PUT /api/v1/publishers/:id`.
+</Callout>
+
 ### Publisher types
 
 | Type | Description |
@@ -69,6 +73,65 @@ The response includes the publisher record (owner view, including your contact d
 | `government` | Government agencies, public institutions |
 | `individual` | Independent bloggers, freelance journalists |
 | `academic` | Universities, research institutions |
+
+## Register under a chosen id
+
+By default, the node generates the publisher id. A client can instead register under an id of its own — a UUID in `publisher_id` — if it proves that it holds the private key of the `public_key` it registers.
+
+This is how a **Studio** connects its organizations (Studio: *Settings → Discovery Nodes → Connect*). Studio signs every teaser with `identifier.publisher_id` set to the organization id, and the node only accepts a teaser from the publisher with exactly that id. A Studio with many organizations therefore registers one publisher per organization, each under the organization's id. Any other client that wants the **same publisher id on several nodes** can do the same.
+
+The proof is an Ed25519 signature of the message
+
+```text
+roadbeat-publisher-register:<publisher_id>:<timestamp>
+```
+
+made with the private key that belongs to `public_key`. `timestamp` is an ISO 8601 date-time and must be within **5 minutes** of the node's clock.
+
+<Steps>
+  <Step title="Sign the registration message">
+    ```javascript
+    import { createPrivateKey, createPublicKey, sign } from 'node:crypto';
+    import { readFileSync, writeFileSync } from 'node:fs';
+
+    const privateKey = createPrivateKey(readFileSync('private.pem'));
+    const publisherId = '0b5f2c1e-8d4a-4c6b-9e2f-1a3b5c7d9e0f'; // e.g. the organization id
+
+    const timestamp = new Date().toISOString();
+    const message = `roadbeat-publisher-register:${publisherId}:${timestamp}`;
+    const signature = sign(null, Buffer.from(message, 'utf-8'), privateKey).toString('base64');
+
+    writeFileSync('register.json', JSON.stringify({
+      name: 'EnergyNews DE',
+      type: 'media',
+      domain: 'energynews.de',
+      public_key: createPublicKey(privateKey).export({ type: 'spki', format: 'pem' }),
+      content_types: ['news', 'events'],
+      contact: { name: 'Tech Team', email: 'tech@energynews.de' },
+      publisher_id: publisherId,
+      proof: { timestamp, signature },
+    }));
+    ```
+  </Step>
+  <Step title="Register within 5 minutes">
+    ```bash
+    curl -X POST http://localhost:3300/api/v1/publishers/register \
+      -H "Content-Type: application/json" \
+      -d @register.json
+    ```
+
+    The response is the same as for any registration, with `publisher.id` set to the id you chose.
+  </Step>
+</Steps>
+
+| Status | Reason |
+|--------|--------|
+| `400` | `proof` is missing, was not made with the private key of `public_key`, was made for another id, or its timestamp is more than 5 minutes off |
+| `409` | A publisher with this id is already registered — or one with this `domain` |
+
+<Callout kind="info">
+  The registration message differs from the [key-rotation message](/features/publisher-self-service#rotate-the-signing-key) (`roadbeat-key-rotation:…`), so a proof made for one can never be replayed as the other. Without `publisher_id`, registration works as before: the node generates the id and no proof is needed.
+</Callout>
 
 ## Domain verification
 
