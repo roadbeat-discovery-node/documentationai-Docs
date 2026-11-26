@@ -154,7 +154,8 @@ Stores registered publisher accounts with verification status and hashed API key
 | `content_types` | TEXT[] | Allowed content types |
 | `verification_status` | VARCHAR(30) | unverified, pod_verified, domain_verified, organization_verified, trusted_publisher, suspended |
 | `trust_level` | VARCHAR(20) | new, established, trusted, suspended |
-| `rate_limits` | JSONB | `{ teasers_per_day, requests_per_minute }` |
+| `rate_limits` | JSONB | `{ teasers_per_day, requests_per_minute }`, optional `updates_per_day` |
+| `backfill_credit_used` | INT | New teasers taken from the one-time backfill credit above the daily limit (default `0`) |
 | `api_key_hash` | VARCHAR(128) | SHA-256 hash of the publisher's API key |
 | `federation_opt_out` | BOOLEAN | Exclude the publisher's teasers from Topic Relay announcements |
 | `owner_deactivated` | BOOLEAN | Switched off by its owner — no ingest, teasers hidden (default `false`) |

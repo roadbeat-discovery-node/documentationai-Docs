@@ -178,12 +178,33 @@ See [Content Pod Publishers](/features/content-pod-publishers) for the document 
 | Level (`verificationStatus`) | Requirements | Teasers/day | Requests/min |
 |-------|-------------|-------------|--------------|
 | **Unverified** (`unverified`) | Basic registration | 100 | 60 |
-| **Pod verified** (`pod_verified`) | Content Pod well-known document | 100 | 60 |
+| **Pod verified** (`pod_verified`) | Content Pod well-known document | 1,000 | 120 |
 | **Domain verified** (`domain_verified`) | DNS TXT record | 1,000 | 120 |
 | **Organization verified** (`organization_verified`) | Business registration proof | 10,000 | 300 |
 | **Trusted publisher** (`trusted_publisher`) | Expert committee approval | 100,000 | 1,000 |
 
-Rate limits are enforced per-publisher using a Redis sliding window counter. Pod-verified publishers keep the limits of unverified publishers, but their teasers are marked `publisher.verified: true`.
+Rate limits are enforced per publisher with Redis counters. Pod verification and domain verification both raise the publisher's limits to their tier; teasers of every verified publisher are marked `publisher.verified: true`.
+
+### Daily limits: new teasers, updates and the backfill credit
+
+**Teasers/day** counts **new** teasers only. Sending a teaser the node already holds again (a `POST` for the same `content_id`, or a `PUT`) is an update and counts against a separate, higher limit: `teasers_per_day` × 10 (operators change the factor with `TEASER_UPDATE_LIMIT_FACTOR`, or set `updates_per_day` in a publisher's `rate_limits`). A change to a publisher's profile re-sends all its teasers; that does not use up the daily allowance for new content.
+
+Above its daily limit, a publisher spends a **one-time backfill credit** of 1,000 new teasers (`PUBLISHER_BACKFILL_CREDIT`; `0` turns it off), so an existing catalogue goes out on the day the publisher connects.
+
+Each window runs 24 hours from the first counted teaser, not per calendar day. A refused request gets `429` with `Retry-After` set to the seconds until the window ends:
+
+```json
+{
+  "statusCode": 429,
+  "message": "Daily teaser limit exceeded",
+  "retryAfter": 41520,
+  "limit": 100,
+  "window": "24h",
+  "kind": "new"
+}
+```
+
+Updates over their limit answer `"Daily teaser update limit exceeded"` with `"kind": "update"`. Studio treats a `429` with `Retry-After` as *deferred* and sends the teaser again at that time.
 
 ## API key management
 
