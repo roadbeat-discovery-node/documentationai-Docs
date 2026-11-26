@@ -2,6 +2,16 @@
 title: Changelog
 description: Release notes and version history for the roadbeat Discovery Node.
 ---
+<Update label="2026-11-26" description="v1.9.0" tags={["feature", "bugfix"]}>
+  ## Tiers the operator sets, pod tier at 500
+
+  - **Set a publisher's tier:** `PUT /api/v1/publishers/{id}/verification` (admin key) sets `organization_verified`, `trusted_publisher` or any lower tier and applies its limits — for companies the operator vouches for, such as those an integration like referenzen.com connects. It also reinstates a suspended publisher. See [Setting a tier](/features/publishers#setting-a-tier-node-operator).
+  - **Pod-verified publishers: 500 teasers/day, 90 requests/min** (v1.8.0 gave them 1,000 / 120). The migration moves pod-verified publishers still on the v1.8.0 defaults.
+  - **Fix:** domain verification lowered an `organization_verified` or `trusted_publisher` publisher to `domain_verified`, and lifted a suspension. Domain and pod verification now only raise the tier.
+
+  Migration: `20261126150000_pod_tier_limits`.
+</Update>
+
 <Update label="2026-11-26" description="v1.8.0" tags={["feature"]}>
   ## Daily limits that let a catalogue go out
 

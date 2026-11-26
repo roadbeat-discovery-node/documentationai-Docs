@@ -783,6 +783,54 @@ paths:
                 $ref: '#/components/schemas/ErrorResponseDto'
       tags:
         - publishers
+  /api/v1/publishers/{id}/verification:
+    put:
+      operationId: PublishersController_setVerification
+      summary: Set the verification tier (admin)
+      description: >-
+        Sets `verification_status` to `unverified`, `pod_verified`,
+        `domain_verified`, `organization_verified` or `trusted_publisher` and
+        applies that tier's default rate limits — e.g. `organization_verified`
+        for a company an integration such as referenzen.com connects.
+        Reinstates a suspended publisher. Domain and pod verification never
+        lower a tier set here. Optional `reason` goes to the log.
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: X-Admin-Key
+          in: header
+          description: Admin API key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - verification_status
+              properties:
+                verification_status:
+                  type: string
+                  enum:
+                    - unverified
+                    - pod_verified
+                    - domain_verified
+                    - organization_verified
+                    - trusted_publisher
+                reason:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: ''
+      tags:
+        - publishers
   /api/v1/publishers/{id}/suspend:
     post:
       operationId: PublishersController_suspend

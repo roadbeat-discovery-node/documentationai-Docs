@@ -178,12 +178,25 @@ See [Content Pod Publishers](/features/content-pod-publishers) for the document 
 | Level (`verificationStatus`) | Requirements | Teasers/day | Requests/min |
 |-------|-------------|-------------|--------------|
 | **Unverified** (`unverified`) | Basic registration | 100 | 60 |
-| **Pod verified** (`pod_verified`) | Content Pod well-known document | 1,000 | 120 |
+| **Pod verified** (`pod_verified`) | Content Pod well-known document | 500 | 90 |
 | **Domain verified** (`domain_verified`) | DNS TXT record | 1,000 | 120 |
-| **Organization verified** (`organization_verified`) | Business registration proof | 10,000 | 300 |
-| **Trusted publisher** (`trusted_publisher`) | Expert committee approval | 100,000 | 1,000 |
+| **Organization verified** (`organization_verified`) | Set by the node operator | 10,000 | 300 |
+| **Trusted publisher** (`trusted_publisher`) | Set by the node operator | 100,000 | 1,000 |
 
-Rate limits are enforced per publisher with Redis counters. Pod verification and domain verification both raise the publisher's limits to their tier; teasers of every verified publisher are marked `publisher.verified: true`.
+Rate limits are enforced per publisher with Redis counters. Pod verification and domain verification raise the publisher's limits to their tier, but never lower a tier the operator set and never lift a suspension. Teasers of every verified publisher are marked `publisher.verified: true`.
+
+### Setting a tier (node operator)
+
+The operator sets a publisher's tier with the admin key, for example `organization_verified` for a company whose catalogue an integration such as referenzen.com connects. The publisher gets that tier's limits from the table above (limits set by hand are replaced), and a suspended publisher is reinstated:
+
+```bash
+curl -X PUT https://discover.roadbeat.net/api/v1/publishers/{id}/verification \
+  -H "X-Admin-Key: YOUR_ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "verification_status": "organization_verified", "reason": "referenzen.com company" }'
+```
+
+`verification_status` is one of `unverified`, `pod_verified`, `domain_verified`, `organization_verified` or `trusted_publisher`; suspend with `POST /api/v1/publishers/{id}/suspend`. The optional `reason` is written to the node's log.
 
 ### Daily limits: new teasers, updates and the backfill credit
 
