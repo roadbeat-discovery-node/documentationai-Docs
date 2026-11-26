@@ -2,6 +2,19 @@
 title: Changelog
 description: Release notes and version history for the roadbeat Discovery Node.
 ---
+<Update label="2026-11-26" description="v1.8.0" tags={["feature"]}>
+  ## Daily limits that let a catalogue go out
+
+  A company connecting its existing catalogue through an integration hit the 100 teasers/day of unverified publishers on its first day, and again on every change to its profile, which re-sends every teaser.
+
+  - **Only new teasers count against teasers/day.** Re-sending a teaser the node already holds (a `POST` for the same `content_id`, or a `PUT`) counts against a separate limit: `teasers_per_day` × 10 (`TEASER_UPDATE_LIMIT_FACTOR`, or `updates_per_day` per publisher).
+  - **One-time backfill credit.** Above its daily limit, every publisher can send 1,000 more new teasers once (`PUBLISHER_BACKFILL_CREDIT`; `0` turns it off).
+  - **Pod-verified publishers get their own tier:** 1,000 teasers/day and 120 requests/min, like domain-verified ones (was: the limits of unverified publishers). Existing pod-verified publishers on the old defaults are moved by the migration.
+  - **`Retry-After` is exact.** A `429` names the seconds until the window ends (was: always 3,600 for the daily limit), and its body says whether new teasers or updates ran out (`kind`).
+
+  See [Daily limits](/features/publishers#daily-limits-new-teasers-updates-and-the-backfill-credit). Migration: `20261126120000_publisher_teaser_limits`.
+</Update>
+
 <Update label="2026-11-24" description="v1.7.1" tags={["bugfix"]}>
   ## Facets survive a Schema Registry outage
 
